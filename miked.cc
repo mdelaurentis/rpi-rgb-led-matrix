@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <math.h>
 #include <stdio.h>
-
+#include "gpio.h"
 using rgb_matrix::RGBMatrix;
 using rgb_matrix::Canvas;
 
@@ -44,13 +44,29 @@ int main(int argc, char *argv[]) {
   /*
    * Set up the RGBMatrix. It implements a 'Canvas' interface.
    */
-  int rows = 32;    // A 32x32 display. Use 16 when this is a 16x32 display.
+  int rows = 16;    // A 32x32 display. Use 16 when this is a 16x32 display.
   int chain = 1;    // Number of boards chained together.
   int parallel = 1; // Number of chains in parallel (1..3). > 1 for plus or Pi2
   Canvas *canvas = new RGBMatrix(&io, rows, chain, parallel);
 
-  DrawOnCanvas(canvas);    // Using the canvas.
+  // DrawOnCanvas(canvas);    // Using the canvas.
+  // canvas->Fill(0, 0, 255);
 
+  printf("Here\n");
+  for (int t = 0; t < 255; t++) {
+    int b = t;
+    for (int x = 0; x < 32; x++) {
+      for (int y = 0; y < 16; y++) {
+        int r = 255 * (x / 32.0);
+        int g = 255 * (y / 16.0);
+        canvas->SetPixel(x, y, r, g, b);
+        usleep(10);
+      }
+    }
+  }
+  printf("Sleeping\n");
+  usleep(1000 * 1000 * 3);
+  printf("Done\n");
   // Animation finished. Shut down the RGB matrix.
   canvas->Clear();
   delete canvas;

@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <algorithm>
+#include <string.h>
 
 using std::min;
 using std::max;
@@ -27,6 +28,180 @@ using namespace rgb_matrix;
  * The following are demo image generators. They all use the utility
  * class ThreadedCanvasManipulator to generate new frames.
  */
+
+const int SPEED = 60;
+
+struct Command {
+  int sleep_millis;
+  int batch;
+  int loc;
+  int rows;
+};
+
+void parse_line(char *line, struct Command *cmd) {
+  char *saveptr;
+  line = strtok_r(line, "\t", &saveptr);
+  cmd->sleep_millis = atoi(line);
+  line = strtok_r(NULL, "\t", &saveptr);
+  cmd->batch = atoi(line);
+  line = strtok_r(NULL, "\t", &saveptr);
+  cmd->loc = atoi(line);
+  line = strtok_r(NULL, "\t", &saveptr);
+  cmd->rows = atoi(line);
+}
+
+int find_pixel(int batch, int *pixel_to_batch, int n) {
+  for (int i = 0; i < n; i++)
+    if (pixel_to_batch[i] == batch)
+      return i;
+  return n;
+}
+
+
+
+/*
+int COLOR_PALATTE[] = {
+  0x000000,
+  0x1133cc,
+  0x33dd00,
+  0xffda21,
+  0xff6622,
+  0xd10000,
+  0x000000
+};
+*/
+
+int COLOR_PALATTE[] = {
+  0x000000,
+  // 0x220066,
+  0x1133cc,
+  0x33dd00,
+  0xffda21,
+  0xff6622,
+  0xd10000,
+  0x000000
+};
+
+
+int COLOR_PALATTE_SIZE = 7;
+
+
+class Pipeline : public ThreadedCanvasManipulator {
+public:
+  Pipeline(Canvas *m) : ThreadedCanvasManipulator(m) {}
+
+  void set_pixel(int x, int y, uint c, float intensity) {
+    intensity = 0.3 + 0.7 * intensity;
+    int r = intensity * ((c & 0xff0000) >> 16);
+    int g = intensity * ((c & 0x00ff00) >>  8);
+    int b = intensity *  (c & 0xff);
+    canvas()->SetPixel(x, y, r, g, b);
+    
+  }
+
+  
+  void Run() {
+    const int max_rows = 1000000;
+    const int width = canvas()->width();
+    const int height = canvas()->height();
+    int i;
+    struct Command cmd;
+    printf("Canvas is %d x %d\n", width, height);
+
+    while (running()) {
+
+
+      FILE *f = fopen("commands.txt", "r");
+      int pixel_to_batch[512];
+      float pixel_to_intensity[512];
+      for (i = 0; i < 512; i++) {
+        pixel_to_batch[i] = 0;
+        pixel_to_intensity[i] = 0.0;
+      }
+
+      for (int k = 0; k < COLOR_PALATTE_SIZE; k++) {
+        for (int x = 0; x < 32; x++) {
+          for (int y = 0; y < 32; y++) {
+            set_pixel(x, y, COLOR_PALATTE[k], 0.75);
+          }
+        }
+        usleep(500000);
+      }
+
+      sleep(1);
+
+      for (int x = 0; x < 32; x++) {
+        for (int y = 0; y < 32; y++) {
+          canvas()->SetPixel(x, y, 0, 0, 0);
+        }
+      }
+      
+      char line_buf[256];
+
+      while (running() && fgets(line_buf, sizeof(line_buf), f)) {
+        parse_line(line_buf, &cmd);
+        cmd.sleep_millis /= SPEED;
+        int sleep_seconds = cmd.sleep_millis / 1000;
+        int sleep_micros = (cmd.sleep_millis % 1000) * 1000;
+        // printf("Sleeping for %d seconds and %d micros\n", sleep_seconds, sleep_micros);
+        sleep(sleep_seconds);
+        usleep(sleep_micros);
+        // usleep(1000);
+        uint color = COLOR_PALATTE[cmd.loc];
+        
+        switch (cmd.loc) {
+          
+          /*
+           * 1 means the batch is in the Gate. Try to find a free pixel.
+           */
+        case 1:
+          i = find_pixel(0, pixel_to_batch, 512);
+          if (i < 512) {
+            pixel_to_batch[i] = cmd.batch;
+            pixel_to_intensity[i] = log(cmd.rows) / log(max_rows);
+          }
+          else {
+            printf("%d no free pixels\n", cmd.batch);
+          }
+          break;
+          
+          /*
+           * 2 through 5 mean its still moving through the gate.
+           */
+        case 2:
+        case 3:        
+        case 4:
+        case 5:        
+          i = find_pixel(cmd.batch, pixel_to_batch, 512);
+          break;
+          
+          /*
+           * 6 means it's done.
+           */
+        case 6:
+          i = find_pixel(cmd.batch, pixel_to_batch, 512);
+          if (i < 512) {
+            pixel_to_batch[i] = 0;
+          }
+          break;
+        }
+        
+        if (i < 512) {
+          int x = i / 16;
+          int y = i % 16;
+          float intensity = pixel_to_intensity[i];
+          intensity = 0.3 + 0.7 * intensity;
+          int r = intensity * ((color & 0xff0000) >> 16);
+          int g = intensity * ((color & 0x00ff00) >>  8);
+          int b = intensity *  (color & 0xff);
+          canvas()->SetPixel(x, y, r, g, b);
+        }
+        }
+        fclose(f);
+      }
+    
+  }
+};
 
 // Simple generator that pulses through RGB and White.
 class ColorPulseGenerator : public ThreadedCanvasManipulator {
@@ -1045,7 +1220,7 @@ static int usage(const char *progname) {
 }
 
 int main(int argc, char *argv[]) {
-  GPIO io;
+  struct gpio_struct io;
   bool as_daemon = false;
   int runtime_seconds = -1;
   int demo = -1;
@@ -1164,8 +1339,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Initialize GPIO pins. This might fail when we don't have permissions.
-  if (!io.Init())
-    return 1;
+  gpio_init(&io);
 
   // Start daemon before we start any threads.
   if (as_daemon) {
@@ -1256,6 +1430,10 @@ int main(int argc, char *argv[]) {
 
   case 11:
     image_gen = new BrightnessPulseGenerator(matrix);
+    break;
+
+  case 12:
+    image_gen = new Pipeline(canvas);
     break;
   }
 

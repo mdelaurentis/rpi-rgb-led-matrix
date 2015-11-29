@@ -44,7 +44,7 @@ public:
 // Pump pixels to screen. Needs to be high priority real-time because jitter
 class RGBMatrix::UpdateThread : public Thread {
 public:
-  UpdateThread(GPIO *io, FrameCanvas *initial_frame)
+  UpdateThread(struct gpio_struct *io, FrameCanvas *initial_frame)
     : io_(io), running_(true),
       current_frame_(initial_frame), next_frame_(NULL) {
     pthread_cond_init(&frame_done_, NULL);
@@ -96,7 +96,7 @@ private:
     return running_;
   }
 
-  GPIO *const io_;
+  struct gpio_struct *const io_;
   Mutex running_mutex_;
   bool running_;
 
@@ -106,7 +106,7 @@ private:
   FrameCanvas *next_frame_;
 };
 
-RGBMatrix::RGBMatrix(GPIO *io, int rows, int chained_displays,
+RGBMatrix::RGBMatrix(struct gpio_struct *io, int rows, int chained_displays,
                      int parallel_displays)
   : rows_(rows), chained_displays_(chained_displays),
     parallel_displays_(parallel_displays),
@@ -131,7 +131,7 @@ RGBMatrix::~RGBMatrix() {
   }
 }
 
-void RGBMatrix::SetGPIO(GPIO *io) {
+void RGBMatrix::SetGPIO(struct gpio_struct *io) {
   if (io == NULL) return;  // nothing to set.
   if (io_ != NULL) return;  // already set.
   io_ = io;

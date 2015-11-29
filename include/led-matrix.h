@@ -42,8 +42,8 @@ namespace internal { class Framebuffer; }
 // methods. This is useful for animations and to prevent tearing.
 //
 // If you arrange the panels in a different way in the physical space, write
-// a CanvasTransformer that does coordinate remapping and which should be added
-// to the transformers, like with LargeSquare64x64Transformer in demo-main.cc.
+// a delegating Canvas that does coordinate remapping, like the
+// LargeSquare64x64Canvas in demo-main.cc.
 class RGBMatrix : public Canvas {
 public:
   // Initialize RGB matrix with GPIO to write to.
@@ -62,13 +62,13 @@ public:
   //
   // The resulting canvas is (rows * parallel_displays) high and
   // (32 * chained_displays) wide.
-  RGBMatrix(GPIO *io, int rows = 32, int chained_displays = 1,
+  RGBMatrix(struct gpio_struct *io, int rows = 32, int chained_displays = 1,
             int parallel_displays = 1);
   virtual ~RGBMatrix();
 
   // Set GPIO output if it was not set already in constructor (otherwise: NoOp).
   // Starts display refresh thread if this is the first setting.
-  void SetGPIO(GPIO *io);
+  void SetGPIO(struct gpio_struct *io);
 
   // Set PWM bits used for output. Default is 11, but if you only deal with
   // limited comic-colors, 1 might be sufficient. Lower require less CPU and
@@ -142,7 +142,7 @@ private:
 
   FrameCanvas *active_;
 
-  GPIO *io_;
+  struct gpio_struct *io_;
   Mutex active_frame_sync_;
   UpdateThread *updater_;
   std::vector<FrameCanvas*> created_frames_;

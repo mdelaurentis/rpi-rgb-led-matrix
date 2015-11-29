@@ -99,9 +99,8 @@ int main(int argc, char *argv[]) {
   /*
    * Set up GPIO pins. This fails when not running as root.
    */
-  GPIO io;
-  if (!io.Init())
-    return 1;
+  struct gpio_struct io;
+  gpio_init(&io);
 
   /*
    * Set up the RGBMatrix. It implements a 'Canvas' interface.
