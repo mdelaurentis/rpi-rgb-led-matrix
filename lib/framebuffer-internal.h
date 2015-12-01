@@ -28,11 +28,10 @@ namespace internal {
 // written out.
 class Framebuffer {
 public:
-  Framebuffer(int rows, int columns, int parallel);
-  ~Framebuffer();
+  Framebuffer(int rows, int columns);
 
   // Initialize GPIO bits for output. Only call once.
-  static void InitGPIO(struct gpio_struct *io, int parallel);
+  static void InitGPIO(struct gpio_struct *io);
 
   // Set PWM bits used for output. Default is 11, but if you only deal with
   // simple comic-colors, 1 might be sufficient. Lower require less CPU.
@@ -56,7 +55,7 @@ public:
   // Canvas-inspired methods, but we're not implementing this interface to not
   // have an unnecessary vtable.
   inline int width() const { return columns_; }
-  inline int height() const { return height_; }
+  inline int height() const { return rows_; }
   void SetPixel(int x, int y, uint8_t red, uint8_t green, uint8_t blue);
   void Clear();
   void Fill(uint8_t red, uint8_t green, uint8_t blue);
@@ -66,18 +65,12 @@ private:
   inline uint16_t MapColor(uint8_t c);
 
   const int rows_;     // Number of rows. 16 or 32.
-  const int parallel_; // Parallel rows of chains. 1 or 2.
-  const int height_;   // rows * parallel
   const int columns_;  // Number of columns. Number of chained boards * 32.
 
   uint8_t pwm_bits_;   // PWM bits to display.
   bool do_luminance_correct_;
   uint8_t brightness_;
 
-  const int double_rows_;
-  const uint8_t row_mask_;
-
-  
   // Standard pinout since July 2015
   // This uses the PWM pin to create the timing.
   union IoBits {
@@ -115,14 +108,6 @@ private:
     IoBits() : raw(0) {}
   };
 
-  // The frame-buffer is organized in bitplanes.
-  // Highest level (slowest to cycle through) are double rows.
-  // For each double-row, we store pwm-bits columns of a bitplane.
-  // Each bitplane-column is pre-filled IoBits, of which the colors are set.
-  // Of course, that means that we store unrelated bits in the frame-buffer,
-  // but it allows easy access in the critical section.
-  IoBits *bitplane_buffer_;
-  inline IoBits *ValueAt(int double_row, int column, int bit);
 };
 }  // namespace internal
 }  // namespace rgb_matrix

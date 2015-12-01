@@ -106,10 +106,8 @@ private:
   FrameCanvas *next_frame_;
 };
 
-RGBMatrix::RGBMatrix(struct gpio_struct *io, int rows, int chained_displays,
-                     int parallel_displays)
+  RGBMatrix::RGBMatrix(struct gpio_struct *io, int rows, int chained_displays)
   : rows_(rows), chained_displays_(chained_displays),
-    parallel_displays_(parallel_displays),
     io_(NULL), updater_(NULL) {
   SetTransformer(NULL);
   active_ = CreateFrameCanvas();
@@ -135,7 +133,7 @@ void RGBMatrix::SetGPIO(struct gpio_struct *io) {
   if (io == NULL) return;  // nothing to set.
   if (io_ != NULL) return;  // already set.
   io_ = io;
-  internal::Framebuffer::InitGPIO(io_, parallel_displays_);
+  internal::Framebuffer::InitGPIO(io_);
   updater_ = new UpdateThread(io_, active_);
   // If we have multiple processors, the kernel
   // jumps around between these, creating some global flicker.
@@ -149,8 +147,7 @@ void RGBMatrix::SetGPIO(struct gpio_struct *io) {
 
 FrameCanvas *RGBMatrix::CreateFrameCanvas() {
   FrameCanvas *result =
-    new FrameCanvas(new internal::Framebuffer(rows_, 32 * chained_displays_,
-                                              parallel_displays_));
+    new FrameCanvas(new internal::Framebuffer(rows_, 32 * chained_displays_));
   if (created_frames_.empty()) {
     // First time. Get defaults from initial Framebuffer.
     pwm_bits_ = result->framebuffer()->pwmbits();
@@ -229,9 +226,10 @@ void RGBMatrix::Fill(uint8_t red, uint8_t green, uint8_t blue) {
 }
 
 // FrameCanvas implementation of Canvas
-FrameCanvas::~FrameCanvas() { delete frame_; }
+
 int FrameCanvas::width() const { return frame_->width(); }
-int FrameCanvas::height() const { return frame_->height(); }
+  int FrameCanvas::height() const { return frame_->height(); }
+
 void FrameCanvas::SetPixel(int x, int y,
                          uint8_t red, uint8_t green, uint8_t blue) {
   frame_->SetPixel(x, y, red, green, blue);

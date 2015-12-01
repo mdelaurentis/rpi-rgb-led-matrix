@@ -62,8 +62,7 @@ public:
   //
   // The resulting canvas is (rows * parallel_displays) high and
   // (32 * chained_displays) wide.
-  RGBMatrix(struct gpio_struct *io, int rows = 32, int chained_displays = 1,
-            int parallel_displays = 1);
+  RGBMatrix(struct gpio_struct *io, int rows = 32, int chained_displays = 1);
   virtual ~RGBMatrix();
 
   // Set GPIO output if it was not set already in constructor (otherwise: NoOp).
@@ -134,7 +133,6 @@ private:
 
   const int rows_;
   const int chained_displays_;
-  const int parallel_displays_;
 
   uint8_t pwm_bits_;
   bool do_luminance_correct_;
@@ -177,7 +175,7 @@ private:
   friend class RGBMatrix;
 
   FrameCanvas(internal::Framebuffer *frame) : frame_(frame){}
-  virtual ~FrameCanvas();
+
   internal::Framebuffer *framebuffer() { return frame_; }
 
   internal::Framebuffer *const frame_;

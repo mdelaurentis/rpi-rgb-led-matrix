@@ -23,8 +23,6 @@ static int usage(const char *progname) {
           "\t-f <font-file>: Use given font.\n"
           "\t-r <rows>     : Display rows. 16 for 16x32, 32 for 32x32. "
           "Default: 32\n"
-          "\t-P <parallel> : For Plus-models or RPi2: parallel chains. 1..3. "
-          "Default: 1\n"
           "\t-c <chained>  : Daisy-chained boards. Default: 1.\n"
           "\t-x <x-origin> : X-Origin of displaying text (Default: 0)\n"
           "\t-y <y-origin> : Y-Origin of displaying text (Default: 0)\n"
@@ -41,7 +39,6 @@ int main(int argc, char *argv[]) {
   const char *bdf_font_file = NULL;
   int rows = 32;
   int chain = 1;
-  int parallel = 1;
   int x_orig = 0;
   int y_orig = -1;
 
@@ -49,7 +46,6 @@ int main(int argc, char *argv[]) {
   while ((opt = getopt(argc, argv, "r:P:c:x:y:f:C:")) != -1) {
     switch (opt) {
     case 'r': rows = atoi(optarg); break;
-    case 'P': parallel = atoi(optarg); break;
     case 'c': chain = atoi(optarg); break;
     case 'x': x_orig = atoi(optarg); break;
     case 'y': y_orig = atoi(optarg); break;
@@ -91,10 +87,6 @@ int main(int argc, char *argv[]) {
   if (chain > 8) {
     fprintf(stderr, "That is a long chain. Expect some flicker.\n");
   }
-  if (parallel < 1 || parallel > 3) {
-    fprintf(stderr, "Parallel outside usable range.\n");
-    return 1;
-  }
 
   /*
    * Set up GPIO pins. This fails when not running as root.
@@ -105,7 +97,7 @@ int main(int argc, char *argv[]) {
   /*
    * Set up the RGBMatrix. It implements a 'Canvas' interface.
    */
-  RGBMatrix *canvas = new RGBMatrix(&io, rows, chain, parallel);
+  RGBMatrix *canvas = new RGBMatrix(&io, rows, chain);
 
   bool all_extreme_colors = true;
   all_extreme_colors &= color.r == 0 || color.r == 255;

@@ -1187,8 +1187,6 @@ static int usage(const char *progname) {
           "\t-r <rows>     : Panel rows. '16' for 16x32 (1:8 multiplexing),\n"
 	  "\t                '32' for 32x32 (1:16), '8' for 1:4 multiplexing; "
           "Default: 32\n"
-          "\t-P <parallel> : For Plus-models or RPi2: parallel chains. 1..3. "
-          "Default: 1\n"
           "\t-c <chained>  : Daisy-chained boards. Default: 1.\n"
           "\t-L            : 'Large' display, composed out of 4 times 32x32\n"
           "\t-p <pwm-bits> : Bits used for PWM. Something between 1..11\n"
@@ -1226,7 +1224,6 @@ int main(int argc, char *argv[]) {
   int demo = -1;
   int rows = 32;
   int chain = 1;
-  int parallel = 1;
   int scroll_ms = 30;
   int pwm_bits = -1;
   int brightness = 100;
@@ -1253,10 +1250,6 @@ int main(int argc, char *argv[]) {
 
     case 'r':
       rows = atoi(optarg);
-      break;
-
-    case 'P':
-      parallel = atoi(optarg);
       break;
 
     case 'c':
@@ -1323,10 +1316,6 @@ int main(int argc, char *argv[]) {
   if (chain > 8) {
     fprintf(stderr, "That is a long chain. Expect some flicker.\n");
   }
-  if (parallel < 1 || parallel > 3) {
-    fprintf(stderr, "Parallel outside usable range.\n");
-    return 1;
-  }
 
   if (brightness < 1 || brightness > 100) {
     fprintf(stderr, "Brightness is outside usable range.\n");
@@ -1351,7 +1340,7 @@ int main(int argc, char *argv[]) {
   }
 
   // The matrix, our 'frame buffer' and display updater.
-  RGBMatrix *matrix = new RGBMatrix(&io, rows, chain, parallel);
+  RGBMatrix *matrix = new RGBMatrix(&io, rows, chain);
   matrix->set_luminance_correct(do_luminance_correct);
   matrix->SetBrightness(brightness);
   if (pwm_bits >= 0 && !matrix->SetPWMBits(pwm_bits)) {

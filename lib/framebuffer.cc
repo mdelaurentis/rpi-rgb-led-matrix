@@ -45,30 +45,27 @@ static const long kBaseTimeNanos = 130;
 // implementations depending on the context.
 static PinPulser *sOutputEnablePulser = NULL;
 
-Framebuffer::Framebuffer(int rows, int columns, int parallel)
-  : rows_(rows),
-    parallel_(parallel),
-    height_(rows * parallel),
-    columns_(columns),
-    pwm_bits_(kBitPlanes), do_luminance_correct_(true), brightness_(100),
-    double_rows_(rows / 2), row_mask_(double_rows_ - 1) {
-  bitplane_buffer_ = new IoBits [double_rows_ * columns_ * kBitPlanes];
+  void init_color_buffer() {
   int i, j, k;
+    
   for (i = 0; i < 16; i++)
     for (j = 0; j < 11; j++)
       for (k = 0; k < 3; k++)
         color_buffer[i][j][k] = 0;
 
-  Clear();
+  }
+  
+Framebuffer::Framebuffer(int rows, int columns)
+  : rows_(rows),
+    columns_(columns),
+    pwm_bits_(kBitPlanes), do_luminance_correct_(true), brightness_(100) {
+
+  init_color_buffer();
   assert(rows_ <= 32);
-  assert(parallel >= 1 && parallel <= 3);
 }
 
-Framebuffer::~Framebuffer() {
-  delete [] bitplane_buffer_;
-}
 
-/* static */ void Framebuffer::InitGPIO(struct gpio_struct *io, int parallel) {
+/* static */ void Framebuffer::InitGPIO(struct gpio_struct *io) {
   if (sOutputEnablePulser != NULL)
     return;  // already initialized.
 
@@ -99,13 +96,6 @@ bool Framebuffer::SetPWMBits(uint8_t value) {
     return false;
   pwm_bits_ = value;
   return true;
-}
-
-inline Framebuffer::IoBits *Framebuffer::ValueAt(int double_row,
-                                                 int column, int bit) {
-  return &bitplane_buffer_[ double_row * (columns_ * kBitPlanes)
-                            + bit * columns_
-                            + column ];
 }
 
 // Do CIE1931 luminance correction and scale to output bitplanes
@@ -140,30 +130,23 @@ inline uint16_t Framebuffer::MapColor(uint8_t c) {
 }
 
 void Framebuffer::Clear() {
-  memset(bitplane_buffer_, 0,
-         sizeof(*bitplane_buffer_) * double_rows_ * columns_ * kBitPlanes);
+  init_color_buffer();
 }
 
 void Framebuffer::Fill(uint8_t r, uint8_t g, uint8_t b) {
-
   for (int y = 0; y < 16; y++)
     for (int x = 0; x < 32; x++)
       SetPixel(x, y, r, g, b);
-
 }
 
 void Framebuffer::SetPixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
-  if (x < 0 || x >= columns_ || y < 0 || y >= height_) return;
+  if (x < 0 || x >= columns_ || y < 0 || y >= rows_) return;
 
   uint16_t red   = MapColor(r);
   uint16_t green = MapColor(g);
   uint16_t blue  = MapColor(b);
 
   const int min_bit_plane = kBitPlanes - pwm_bits_;
-
-  if (y >= rows_) {
-    return;
-  }
 
   uint32_t col_mask = 1 << x;
   for (int b = min_bit_plane; b < kBitPlanes; b++) {
@@ -194,7 +177,7 @@ void Framebuffer::DumpToMatrix(struct gpio_struct *io) {
   int debug = debug_counter == 0;
 
   const int pwm_to_show = pwm_bits_;  // Local copy, might change in process.
-  for (uint8_t d_row = 0; d_row < double_rows_; ++d_row) {
+  for (uint8_t d_row = 0; d_row < rows_ / 2; ++d_row) {
     uint32_t row_addr = d_row << 22;
     
     // Set row address (A, B, C). ABC are bits 22-24.
