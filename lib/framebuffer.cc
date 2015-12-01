@@ -27,6 +27,10 @@
 
 #include "gpio.h"
 
+  uint32_t color_buffer[16][11][3];
+
+
+
 namespace rgb_matrix {
 namespace internal {
 enum {
@@ -41,7 +45,6 @@ static const long kBaseTimeNanos = 130;
 // implementations depending on the context.
 static PinPulser *sOutputEnablePulser = NULL;
 
-
 Framebuffer::Framebuffer(int rows, int columns, int parallel)
   : rows_(rows),
     parallel_(parallel),
@@ -50,6 +53,12 @@ Framebuffer::Framebuffer(int rows, int columns, int parallel)
     pwm_bits_(kBitPlanes), do_luminance_correct_(true), brightness_(100),
     double_rows_(rows / 2), row_mask_(double_rows_ - 1) {
   bitplane_buffer_ = new IoBits [double_rows_ * columns_ * kBitPlanes];
+  int i, j, k;
+  for (i = 0; i < 16; i++)
+    for (j = 0; j < 11; j++)
+      for (k = 0; k < 3; k++)
+        color_buffer[i][j][k] = 0;
+
   Clear();
   assert(rows_ <= 32);
   assert(parallel >= 1 && parallel <= 3);
@@ -136,66 +145,44 @@ void Framebuffer::Clear() {
 }
 
 void Framebuffer::Fill(uint8_t r, uint8_t g, uint8_t b) {
-  const uint16_t red   = MapColor(r);
-  const uint16_t green = MapColor(g);
-  const uint16_t blue  = MapColor(b);
 
-  for (int b = kBitPlanes - pwm_bits_; b < kBitPlanes; ++b) {
-    uint16_t mask = 1 << b;
-    IoBits plane_bits;
-    plane_bits.raw = 0;
-    plane_bits.bits.p0_r1 = plane_bits.bits.p0_r2 = (red & mask) == mask;
-    plane_bits.bits.p0_g1 = plane_bits.bits.p0_g2 = (green & mask) == mask;
-    plane_bits.bits.p0_b1 = plane_bits.bits.p0_b2 = (blue & mask) == mask;
+  for (int y = 0; y < 16; y++)
+    for (int x = 0; x < 32; x++)
+      SetPixel(x, y, r, g, b);
 
-    for (int row = 0; row < double_rows_; ++row) {
-      IoBits *row_data = ValueAt(row, 0, b);
-      for (int col = 0; col < columns_; ++col) {
-        (row_data++)->raw = plane_bits.raw;
-      }
-    }
-  }
 }
 
 void Framebuffer::SetPixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
   if (x < 0 || x >= columns_ || y < 0 || y >= height_) return;
 
-  const uint16_t red   = MapColor(r);
-  const uint16_t green = MapColor(g);
-  const uint16_t blue  = MapColor(b);
+  uint16_t red   = MapColor(r);
+  uint16_t green = MapColor(g);
+  uint16_t blue  = MapColor(b);
 
   const int min_bit_plane = kBitPlanes - pwm_bits_;
-  IoBits *bits = ValueAt(y & row_mask_, x, min_bit_plane);
 
-  // Manually expand the three cases for better performance.
-  // TODO(hzeller): This is a bit repetetive. Test if it pays off to just
-  // pre-calc rgb mask and apply.'
-
-  // printf("rows is %d, double_rows is %d, y is %d\n", rows_, double_rows_, y);
   if (y >= rows_) {
     return;
   }
-  if (y < double_rows_) {   // Upper sub-panel.
-    for (int b = min_bit_plane; b < kBitPlanes; ++b) {
-      const uint16_t mask = 1 << b;
-      bits->bits.p0_r1 = (red & mask) == mask;
-      bits->bits.p0_g1 = (green & mask) == mask;
-      bits->bits.p0_b1 = (blue & mask) == mask;
-      bits += columns_;
-    }
-  } else {
-    for (int b = min_bit_plane; b < kBitPlanes; ++b) {
-      const uint16_t mask = 1 << b;
-      bits->bits.p0_r2 = (red & mask) == mask;
-      bits->bits.p0_g2 = (green & mask) == mask;
-      bits->bits.p0_b2 = (blue & mask) == mask;
-      bits += columns_;
-    }
+
+  uint32_t col_mask = 1 << x;
+  for (int b = min_bit_plane; b < kBitPlanes; b++) {
+    color_buffer[y][b][0] &= ~col_mask;
+    color_buffer[y][b][1] &= ~col_mask;
+    color_buffer[y][b][2] &= ~col_mask;
+    color_buffer[y][b][0] |= (red & 1)   << x;
+    color_buffer[y][b][1] |= (green & 1) << x;
+    color_buffer[y][b][2] |= (blue & 1)  << x;
+
+    red   >>= 1;
+    green >>= 1;
+    blue  >>= 1;
   }
 }
 
 
   int debug_counter = 0;
+
 
 
 void Framebuffer::DumpToMatrix(struct gpio_struct *io) {
@@ -205,7 +192,7 @@ void Framebuffer::DumpToMatrix(struct gpio_struct *io) {
 
   debug_counter = (debug_counter + 1) % 1000;
   int debug = debug_counter == 0;
-  
+
   const int pwm_to_show = pwm_bits_;  // Local copy, might change in process.
   for (uint8_t d_row = 0; d_row < double_rows_; ++d_row) {
     uint32_t row_addr = d_row << 22;
@@ -217,17 +204,38 @@ void Framebuffer::DumpToMatrix(struct gpio_struct *io) {
     // Rows can't be switched very quickly without ghosting, so we do the
     // full PWM of one row before switching rows.
     for (int b = kBitPlanes - pwm_to_show; b < kBitPlanes; ++b) {
-      IoBits *row_data = ValueAt(d_row, 0, b);
+      
+      const int y = d_row;
+      uint32_t r_bits1 = color_buffer[y][b][0];
+      uint32_t g_bits1 = color_buffer[y][b][1];
+      uint32_t b_bits1 = color_buffer[y][b][2];
+      uint32_t r_bits2 = color_buffer[y+8][b][0];
+      uint32_t g_bits2 = color_buffer[y+8][b][1];
+      uint32_t b_bits2 = color_buffer[y+8][b][2];
+      
       // While the output enable is still on, we can already clock in the next
       // data.
       for (int col = 0; col < columns_; ++col) {
-        const IoBits &out = *row_data++;
+
+        uint32_t out_bits = (((r_bits1 & 1) << 11) |
+                             ((g_bits1 & 1) << 27) |
+                             ((b_bits1 & 1) <<  7) |
+                             ((r_bits2 & 1) <<  8) |
+                             ((g_bits2 & 1) <<  9) |
+                             ((b_bits2 & 1) << 10));
+
+        r_bits1 >>= 1;
+        g_bits1 >>= 1;
+        b_bits1 >>= 1;
+        r_bits2 >>= 1;
+        g_bits2 >>= 1;
+        b_bits2 >>= 1;
 
         // Clear the clock and color, then set color and clock. Clock
         // is bit 17.
         *(io->clear_bits) = 1 << 17;
-        *(io->clear_bits) =  ~out.raw & color_mask;
-        *(io->set_bits)   =   out.raw & color_mask;
+        *(io->clear_bits) =  ~out_bits & color_mask;
+        *(io->set_bits)   =   out_bits & color_mask;
         *(io->set_bits)   = 1 << 17;
       }
       // Clear the clock and color

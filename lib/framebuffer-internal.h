@@ -77,6 +77,7 @@ private:
   const int double_rows_;
   const uint8_t row_mask_;
 
+  
   // Standard pinout since July 2015
   // This uses the PWM pin to create the timing.
   union IoBits {
