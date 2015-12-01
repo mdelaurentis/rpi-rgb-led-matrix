@@ -200,15 +200,11 @@ void Framebuffer::SetPixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
 
 void Framebuffer::DumpToMatrix(struct gpio_struct *io) {
   //  printf("In dump to matrix\n");
-  uint32_t color_clock_mask = 1 << 7 | 1 << 8 | 1 << 9 | 1 << 10 | 1 << 11 |  1 << 17 | 1 << 27;
 
   uint32_t color_mask = 1 << 7 | 1 << 8 | 1 << 9 | 1 << 10 | 1 << 11 | 1 << 27;
 
   debug_counter = (debug_counter + 1) % 1000;
   int debug = debug_counter == 0;
-  if (debug) {
-    printf("Color clock mask is %x\n", color_clock_mask);
-  }
   
   const int pwm_to_show = pwm_bits_;  // Local copy, might change in process.
   for (uint8_t d_row = 0; d_row < double_rows_; ++d_row) {
