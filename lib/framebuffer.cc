@@ -27,8 +27,7 @@
 
 #include "gpio.h"
 
-  uint32_t color_buffer[16][11][3];
-
+uint32_t color_buffer[16][11][3];
 
 
 namespace rgb_matrix {
