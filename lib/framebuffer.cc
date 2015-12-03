@@ -36,10 +36,6 @@ enum {
   kBitPlanes = 8  // maximum usable bitplanes.
 };
 
-// Lower values create a higher framerate, but display will be a
-// bit dimmer. Good values are between 100 and 200.
-static const long kBaseTimeNanos = 130;
-
 // We need one global instance of a timing correct pulser. There are different
 // implementations depending on the context.
 static PinPulser *sOutputEnablePulser = NULL;
@@ -71,7 +67,7 @@ Framebuffer::Framebuffer(int rows, int columns)
   // Initialize outputs, make sure that all of these are supported bits.
   gpio_init_outputs(io);
 
-  sOutputEnablePulser = new PinPulser(kBaseTimeNanos);
+  sOutputEnablePulser = new PinPulser();
 }
 
 // Do CIE1931 luminance correction and scale to output bitplanes

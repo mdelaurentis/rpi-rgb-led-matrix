@@ -92,12 +92,15 @@ static uint32_t *mmap_bcm_register(off_t register_offset) {
   return result;
 }
 
+// Lower values create a higher framerate, but display will be a
+// bit dimmer. Good values are between 100 and 200.
+static const long kBaseTimeNanos = 130;
 
 namespace rgb_matrix {
 
-  PinPulser::PinPulser(int base) {
+  PinPulser::PinPulser() {
 
-    const uint32_t divider = base / 4;
+    const uint32_t divider = kBaseTimeNanos / 4;
     assert(divider < (1<<12));  // we only have 12 bits.
     
     // Initialize timer
@@ -106,7 +109,7 @@ namespace rgb_matrix {
     
     // 11 bit planes    
     for (size_t i = 0; i < 11; ++i) {
-      sleep_hints_[i] = (base << i) / 1000;
+      sleep_hints_[i] = (kBaseTimeNanos << i) / 1000;
     }
     
     // Get relevant registers
@@ -200,6 +203,7 @@ namespace rgb_matrix {
   
 
 } // namespace rgb_matrix
+
 
 
 void gpio_init(struct gpio_struct *gpio) {

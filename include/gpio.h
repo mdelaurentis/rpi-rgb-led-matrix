@@ -35,7 +35,7 @@ namespace rgb_matrix {
 class PinPulser {
 public:
 
-  PinPulser(int kBaseTimeNanos);
+  PinPulser();
   
   // Send a pulse with a given length (index into nano_wait_spec array).
   void SendPulse(int time_spec_number);
