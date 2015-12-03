@@ -38,7 +38,7 @@ enum {
 
 // We need one global instance of a timing correct pulser. There are different
 // implementations depending on the context.
-static PinPulser *sOutputEnablePulser = NULL;
+
 
   void init_color_buffer() {
   int i, j, k;
@@ -61,13 +61,10 @@ Framebuffer::Framebuffer(int rows, int columns)
 
 
 /* static */ void Framebuffer::InitGPIO(struct gpio_struct *io) {
-  if (sOutputEnablePulser != NULL)
-    return;  // already initialized.
-
+  
   // Initialize outputs, make sure that all of these are supported bits.
   gpio_init_outputs(io);
-
-  sOutputEnablePulser = new PinPulser();
+  gpio_init_pulser(io);
 }
 
 // Do CIE1931 luminance correction and scale to output bitplanes
@@ -195,16 +192,16 @@ void Framebuffer::DumpToMatrix(struct gpio_struct *io) {
       
 
       // OE of the previous row-data must be finished before strobe.
-      sOutputEnablePulser->WaitPulseFinished();
+      gpio_wait_for_pulse(io);
 
       // Set and clear the strobe (bit 4)
       *(io->set_bits) = 1 << 4;
       *(io->clear_bits) = 1 << 4;
 
       // Now switch on for the sleep time necessary for that bit-plane.
-      sOutputEnablePulser->SendPulse(b);
+      gpio_pulse(io, b);
     }
-    sOutputEnablePulser->WaitPulseFinished();
+    gpio_wait_for_pulse(io);
   }
 }
 }  // namespace internal

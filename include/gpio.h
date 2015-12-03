@@ -22,27 +22,18 @@ struct gpio_struct {
   volatile uint32_t *port;
   volatile uint32_t *set_bits;
   volatile uint32_t *clear_bits;
+  volatile uint32_t *pwm_reg;
+  volatile uint32_t *fifo;
+  volatile uint32_t *clk_reg;
 };
 
 
-// A PinPulser is a utility class that pulses a GPIO pin.
-class PinPulser {
-public:
-
-  PinPulser();
+void gpio_init_pulser(struct gpio_struct *gpio);
   
   // Send a pulse with a given length (index into nano_wait_spec array).
-  void SendPulse(int time_spec_number);
+void gpio_pulse(struct gpio_struct *gpio, int c);
 
-  // If SendPulse() is asynchronously implemented, wait for pulse to finish.
-  void WaitPulseFinished();
-
-private:
-  volatile uint32_t *pwm_reg_;
-  volatile uint32_t *fifo_;
-  volatile uint32_t *clk_reg_;
-};
-
+void gpio_wait_for_pulse(struct gpio_struct *gpio);
 
 void gpio_init(struct gpio_struct * gpio);
 void gpio_init_outputs(struct gpio_struct * gpio);
