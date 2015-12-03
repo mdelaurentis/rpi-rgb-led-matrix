@@ -150,11 +150,9 @@ FrameCanvas *RGBMatrix::CreateFrameCanvas() {
     new FrameCanvas(new internal::Framebuffer(rows_, 32 * chained_displays_));
   if (created_frames_.empty()) {
     // First time. Get defaults from initial Framebuffer.
-    pwm_bits_ = result->framebuffer()->pwmbits();
     do_luminance_correct_ = result->framebuffer()->luminance_correct();
     brightness_ = result->framebuffer()->brightness();
   } else {
-    result->framebuffer()->SetPWMBits(pwm_bits_);
     result->framebuffer()->set_luminance_correct(do_luminance_correct_);
     result->framebuffer()->SetBrightness(brightness_);
   }
@@ -177,14 +175,6 @@ void RGBMatrix::SetTransformer(CanvasTransformer *transformer) {
   }
 }
 
-bool RGBMatrix::SetPWMBits(uint8_t value) {
-  const bool success = active_->framebuffer()->SetPWMBits(value);
-  if (success) {
-    pwm_bits_ = value;
-  }
-  return success;
-}
-uint8_t RGBMatrix::pwmbits() { return pwm_bits_; }
 
 // Map brightness of output linearly to input with CIE1931 profile.
 void RGBMatrix::set_luminance_correct(bool on) {
@@ -238,8 +228,6 @@ void FrameCanvas::Clear() { return frame_->Clear(); }
 void FrameCanvas::Fill(uint8_t red, uint8_t green, uint8_t blue) {
   frame_->Fill(red, green, blue);
 }
-bool FrameCanvas::SetPWMBits(uint8_t value) { return frame_->SetPWMBits(value); }
-uint8_t FrameCanvas::pwmbits() { return frame_->pwmbits(); }
 
 // Map brightness of output linearly to input with CIE1931 profile.
 void FrameCanvas::set_luminance_correct(bool on) { frame_->set_luminance_correct(on); }

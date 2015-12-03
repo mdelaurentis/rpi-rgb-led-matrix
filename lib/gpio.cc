@@ -107,9 +107,6 @@ namespace rgb_matrix {
     // 11 bit planes    
     for (size_t i = 0; i < 11; ++i) {
       sleep_hints_[i] = (base << i) / 1000;
-      pwm_range_[i] = 2 * (base << i) / base;
-      printf("Added sleep hint %d and pwm range %d\n",
-             sleep_hints_[i], pwm_range_[i]);
     }
     
     // Get relevant registers
@@ -141,25 +138,26 @@ namespace rgb_matrix {
   }
 
   void PinPulser::SendPulse(int c) {
-    if (pwm_range_[c] < 16) {
-      pwm_reg_[PWM_RNG1] = pwm_range_[c];
+    uint32_t pwm_range = 1 << (c + 1);
+    if (pwm_range < 16) {
+      pwm_reg_[PWM_RNG1] = pwm_range;
 
-      *fifo_ = pwm_range_[c];
+      *fifo_ = pwm_range;
     } else {
       // Keep the actual range as short as possible, as we have to
       // wait for one full period of these in the zero phase.
       // The hardware can't deal with values < 2, so only do this when
       // have enough of these.
-      pwm_reg_[PWM_RNG1] = pwm_range_[c] / 8;
+      pwm_reg_[PWM_RNG1] = pwm_range / 8;
 
-      *fifo_ = pwm_range_[c] / 8;
-      *fifo_ = pwm_range_[c] / 8;
-      *fifo_ = pwm_range_[c] / 8;
-      *fifo_ = pwm_range_[c] / 8;
-      *fifo_ = pwm_range_[c] / 8;
-      *fifo_ = pwm_range_[c] / 8;
-      *fifo_ = pwm_range_[c] / 8;
-      *fifo_ = pwm_range_[c] / 8;
+      *fifo_ = pwm_range / 8;
+      *fifo_ = pwm_range / 8;
+      *fifo_ = pwm_range / 8;
+      *fifo_ = pwm_range / 8;
+      *fifo_ = pwm_range / 8;
+      *fifo_ = pwm_range / 8;
+      *fifo_ = pwm_range / 8;
+      *fifo_ = pwm_range / 8;
     }
 
     /*

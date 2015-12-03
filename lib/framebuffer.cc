@@ -33,7 +33,7 @@ uint32_t color_buffer[16][11][3];
 namespace rgb_matrix {
 namespace internal {
 enum {
-  kBitPlanes = 11  // maximum usable bitplanes.
+  kBitPlanes = 8  // maximum usable bitplanes.
 };
 
 // Lower values create a higher framerate, but display will be a
@@ -57,7 +57,7 @@ static PinPulser *sOutputEnablePulser = NULL;
 Framebuffer::Framebuffer(int rows, int columns)
   : rows_(rows),
     columns_(columns),
-    pwm_bits_(kBitPlanes), do_luminance_correct_(true), brightness_(100) {
+    do_luminance_correct_(true), brightness_(100) {
 
   init_color_buffer();
   assert(rows_ <= 32);
@@ -72,13 +72,6 @@ Framebuffer::Framebuffer(int rows, int columns)
   gpio_init_outputs(io);
 
   sOutputEnablePulser = new PinPulser(kBaseTimeNanos);
-}
-
-bool Framebuffer::SetPWMBits(uint8_t value) {
-  if (value < 1 || value > kBitPlanes)
-    return false;
-  pwm_bits_ = value;
-  return true;
 }
 
 // Do CIE1931 luminance correction and scale to output bitplanes
@@ -129,10 +122,8 @@ void Framebuffer::SetPixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
   uint16_t green = MapColor(g);
   uint16_t blue  = MapColor(b);
 
-  const int min_bit_plane = kBitPlanes - pwm_bits_;
-
   uint32_t col_mask = 1 << x;
-  for (int b = min_bit_plane; b < kBitPlanes; b++) {
+  for (int b = 0; b < kBitPlanes; b++) {
     color_buffer[y][b][0] &= ~col_mask;
     color_buffer[y][b][1] &= ~col_mask;
     color_buffer[y][b][2] &= ~col_mask;
@@ -159,7 +150,6 @@ void Framebuffer::DumpToMatrix(struct gpio_struct *io) {
   debug_counter = (debug_counter + 1) % 1000;
   int debug = debug_counter == 0;
 
-  const int pwm_to_show = pwm_bits_;  // Local copy, might change in process.
   for (uint8_t d_row = 0; d_row < rows_ / 2; ++d_row) {
     uint32_t row_addr = d_row << 22;
     
@@ -169,7 +159,7 @@ void Framebuffer::DumpToMatrix(struct gpio_struct *io) {
     
     // Rows can't be switched very quickly without ghosting, so we do the
     // full PWM of one row before switching rows.
-    for (int b = kBitPlanes - pwm_to_show; b < kBitPlanes; ++b) {
+    for (int b = 0; b < kBitPlanes; ++b) {
       
       const int y = d_row;
       uint32_t r_bits1 = color_buffer[y][b][0];

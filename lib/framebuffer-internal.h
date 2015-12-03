@@ -33,12 +33,6 @@ public:
   // Initialize GPIO bits for output. Only call once.
   static void InitGPIO(struct gpio_struct *io);
 
-  // Set PWM bits used for output. Default is 11, but if you only deal with
-  // simple comic-colors, 1 might be sufficient. Lower require less CPU.
-  // Returns boolean to signify if value was within range.
-  bool SetPWMBits(uint8_t value);
-  uint8_t pwmbits() { return pwm_bits_; }
-
   // Map brightness of output linearly to input with CIE1931 profile.
   void set_luminance_correct(bool on) { do_luminance_correct_ = on; }
   bool luminance_correct() const { return do_luminance_correct_; }
@@ -67,7 +61,6 @@ private:
   const int rows_;     // Number of rows. 16 or 32.
   const int columns_;  // Number of columns. Number of chained boards * 32.
 
-  uint8_t pwm_bits_;   // PWM bits to display.
   bool do_luminance_correct_;
   uint8_t brightness_;
 

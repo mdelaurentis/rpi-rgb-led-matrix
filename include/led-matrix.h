@@ -69,17 +69,6 @@ public:
   // Starts display refresh thread if this is the first setting.
   void SetGPIO(struct gpio_struct *io);
 
-  // Set PWM bits used for output. Default is 11, but if you only deal with
-  // limited comic-colors, 1 might be sufficient. Lower require less CPU and
-  // increases refresh-rate.
-  //
-  // Returns boolean to signify if value was within range.
-  //
-  // This sets the PWM bits for the current active FrameCanvas and future
-  // ones that are created with CreateFrameCanvas().
-  bool SetPWMBits(uint8_t value);
-  uint8_t pwmbits();   // return the pwm-bits of the currently active buffer.
-
   // Map brightness of output linearly to input with CIE1931 profile.
   void set_luminance_correct(bool on);
   bool luminance_correct() const;

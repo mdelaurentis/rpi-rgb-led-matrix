@@ -44,7 +44,6 @@ public:
   void WaitPulseFinished();
 
 private:
-  uint32_t pwm_range_[11];
   int sleep_hints_[11];
   volatile uint32_t *pwm_reg_;
   volatile uint32_t *fifo_;

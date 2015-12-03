@@ -1189,7 +1189,6 @@ static int usage(const char *progname) {
           "Default: 32\n"
           "\t-c <chained>  : Daisy-chained boards. Default: 1.\n"
           "\t-L            : 'Large' display, composed out of 4 times 32x32\n"
-          "\t-p <pwm-bits> : Bits used for PWM. Something between 1..11\n"
           "\t-l            : Don't do luminance correction (CIE1931)\n"
           "\t-D <demo-nr>  : Always needs to be set\n"
           "\t-d            : run as daemon. Use this when starting in\n"
@@ -1225,7 +1224,6 @@ int main(int argc, char *argv[]) {
   int rows = 32;
   int chain = 1;
   int scroll_ms = 30;
-  int pwm_bits = -1;
   int brightness = 100;
   int rotation = 0;
   bool large_display = false;
@@ -1258,10 +1256,6 @@ int main(int argc, char *argv[]) {
 
     case 'm':
       scroll_ms = atoi(optarg);
-      break;
-
-    case 'p':
-      pwm_bits = atoi(optarg);
       break;
 
     case 'b':
@@ -1343,10 +1337,6 @@ int main(int argc, char *argv[]) {
   RGBMatrix *matrix = new RGBMatrix(&io, rows, chain);
   matrix->set_luminance_correct(do_luminance_correct);
   matrix->SetBrightness(brightness);
-  if (pwm_bits >= 0 && !matrix->SetPWMBits(pwm_bits)) {
-    fprintf(stderr, "Invalid range of pwm-bits\n");
-    return 1;
-  }
 
   LinkedTransformer *transformer = new LinkedTransformer();
   matrix->SetTransformer(transformer);
