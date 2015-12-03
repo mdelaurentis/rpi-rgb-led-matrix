@@ -37,7 +37,7 @@ public:
   }
   uint8_t brightness() { return brightness_; }
 
-  void DumpToMatrix(struct gpio_struct *io);
+  void DumpToMatrix();
 
   // Canvas-inspired methods, but we're not implementing this interface to not
   // have an unnecessary vtable.

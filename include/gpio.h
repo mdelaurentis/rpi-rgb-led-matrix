@@ -28,11 +28,11 @@ struct gpio_struct {
 };
 
 
-void gpio_init_pulser(struct gpio_struct *gpio);
-void gpio_pulse(struct gpio_struct *gpio, int c);
-void gpio_wait_for_pulse(struct gpio_struct *gpio);
-void gpio_init(struct gpio_struct * gpio);
-void gpio_init_outputs(struct gpio_struct * gpio);
+void gpio_pulse(int c);
+void gpio_wait_for_pulse();
+void gpio_init();
+
+struct gpio_struct *get_gpio();
 
 #endif  // RPI_GPIO_H
 

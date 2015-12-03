@@ -64,12 +64,12 @@ public:
   //
   // The resulting canvas is (rows * parallel_displays) high and
   // (32 * chained_displays) wide.
-  RGBMatrix(struct gpio_struct *io, int rows = 32, int chained_displays = 1);
+  RGBMatrix(int rows = 32, int chained_displays = 1);
   virtual ~RGBMatrix();
 
   // Set GPIO output if it was not set already in constructor (otherwise: NoOp).
   // Starts display refresh thread if this is the first setting.
-  void SetGPIO(struct gpio_struct *io);
+  void SetGPIO();
 
   // Map brightness of output linearly to input with CIE1931 profile.
   void set_luminance_correct(bool on);
@@ -131,7 +131,6 @@ private:
 
   FrameCanvas *active_;
 
-  struct gpio_struct *io_;
   Mutex active_frame_sync_;
   UpdateThread *updater_;
   std::vector<FrameCanvas*> created_frames_;

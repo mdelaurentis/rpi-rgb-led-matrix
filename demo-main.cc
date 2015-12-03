@@ -1217,7 +1217,6 @@ static int usage(const char *progname) {
 }
 
 int main(int argc, char *argv[]) {
-  struct gpio_struct io;
   bool as_daemon = false;
   int runtime_seconds = -1;
   int demo = -1;
@@ -1321,8 +1320,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // Initialize GPIO pins. This might fail when we don't have permissions.
-  gpio_init(&io);
 
   // Start daemon before we start any threads.
   if (as_daemon) {
@@ -1334,7 +1331,7 @@ int main(int argc, char *argv[]) {
   }
 
   // The matrix, our 'frame buffer' and display updater.
-  RGBMatrix *matrix = new RGBMatrix(&io, rows, chain);
+  RGBMatrix *matrix = new RGBMatrix(rows, chain);
   matrix->set_luminance_correct(do_luminance_correct);
   matrix->SetBrightness(brightness);
 

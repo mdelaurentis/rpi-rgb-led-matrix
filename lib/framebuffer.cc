@@ -27,11 +27,28 @@
 
 #include "gpio.h"
 
-uint32_t color_buffer[16][11][3];
-
 enum {
   kBitPlanes = 8  // maximum usable bitplanes.
 };
+
+
+uint32_t color_buffer[16][11][3];
+static uint16_t cie1931_lookup[256 * 100];
+
+// Do CIE1931 luminance correction and scale to output bitplanes
+static uint16_t luminance_cie1931(uint8_t c, uint8_t brightness) {
+  float out_factor = ((1 << kBitPlanes) - 1);
+  float v = (float) c * brightness / 255.0;
+  return out_factor * ((v <= 8) ? v / 902.3 : pow((v + 16) / 116.0, 3));
+}
+
+static void cie1931_lookup_init() {
+  for (int i = 0; i < 256; ++i) {
+    for (int j = 0; j < 100; ++j) {
+      cie1931_lookup[i * 100 + j] = luminance_cie1931(i, j + 1);
+    }
+  }
+}
 
 // We need one global instance of a timing correct pulser. There are different
 // implementations depending on the context.
@@ -49,42 +66,17 @@ enum {
 Framebuffer::Framebuffer(int rows, int columns)
   : rows_(rows),
     columns_(columns),
-    do_luminance_correct_(true), brightness_(100) {
-
+    brightness_(100) {
+  cie1931_lookup_init();
   init_color_buffer();
   assert(rows_ <= 32);
 }
 
 
-// Do CIE1931 luminance correction and scale to output bitplanes
-static uint16_t luminance_cie1931(uint8_t c, uint8_t brightness) {
-  float out_factor = ((1 << kBitPlanes) - 1);
-  float v = (float) c * brightness / 255.0;
-  return out_factor * ((v <= 8) ? v / 902.3 : pow((v + 16) / 116.0, 3));
-}
 
-static uint16_t *CreateLuminanceCIE1931LookupTable() {
-  uint16_t *result = new uint16_t[256 * 100];
-  for (int i = 0; i < 256; ++i)
-    for (int j = 0; j < 100; ++j)
-      result[i * 100 + j] = luminance_cie1931(i, j + 1);
-
-  return result;
-}
 
 inline uint16_t Framebuffer::MapColor(uint8_t c) {
-
-  if (do_luminance_correct_) {
-    static uint16_t *luminance_lookup = CreateLuminanceCIE1931LookupTable();
-    return luminance_lookup[c * 100 + (brightness_ - 1)];
-  } else {
-    // simple scale down the color value
-    c = c * brightness_ / 100;
-
-    enum {shift = kBitPlanes - 8};  //constexpr; shift to be left aligned.
-    return (shift > 0) ? (c << shift) : (c >> -shift);
-  }
-
+  return cie1931_lookup[c * 100 + (brightness_ - 1)];
 }
 
 void Framebuffer::Clear() {
@@ -100,10 +92,12 @@ void Framebuffer::Fill(uint8_t r, uint8_t g, uint8_t b) {
 void Framebuffer::SetPixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
   if (x < 0 || x >= columns_ || y < 0 || y >= rows_) return;
 
+  
   uint16_t red   = MapColor(r);
   uint16_t green = MapColor(g);
   uint16_t blue  = MapColor(b);
-
+  
+  
   uint32_t col_mask = 1 << x;
   for (int b = 0; b < kBitPlanes; b++) {
     color_buffer[y][b][0] &= ~col_mask;
@@ -120,11 +114,10 @@ void Framebuffer::SetPixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
 }
 
 
-  int debug_counter = 0;
+int debug_counter = 0;
 
-
-
-void Framebuffer::DumpToMatrix(struct gpio_struct *io) {
+void Framebuffer::DumpToMatrix() {
+  struct gpio_struct *io = get_gpio();
   //  printf("In dump to matrix\n");
 
   uint32_t color_mask = 1 << 7 | 1 << 8 | 1 << 9 | 1 << 10 | 1 << 11 | 1 << 27;
@@ -181,15 +174,15 @@ void Framebuffer::DumpToMatrix(struct gpio_struct *io) {
       
 
       // OE of the previous row-data must be finished before strobe.
-      gpio_wait_for_pulse(io);
+      gpio_wait_for_pulse();
 
       // Set and clear the strobe (bit 4)
       *(io->set_bits) = 1 << 4;
       *(io->clear_bits) = 1 << 4;
 
       // Now switch on for the sleep time necessary for that bit-plane.
-      gpio_pulse(io, b);
+      gpio_pulse(b);
     }
-    gpio_wait_for_pulse(io);
+    gpio_wait_for_pulse();
   }
 }

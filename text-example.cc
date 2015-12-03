@@ -88,16 +88,11 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "That is a long chain. Expect some flicker.\n");
   }
 
-  /*
-   * Set up GPIO pins. This fails when not running as root.
-   */
-  struct gpio_struct io;
-  gpio_init(&io);
 
   /*
    * Set up the RGBMatrix. It implements a 'Canvas' interface.
    */
-  RGBMatrix *canvas = new RGBMatrix(&io, rows, chain);
+  RGBMatrix *canvas = new RGBMatrix(rows, chain);
 
   const int x = x_orig;
   int y = y_orig;

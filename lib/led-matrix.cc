@@ -44,8 +44,8 @@ public:
 // Pump pixels to screen. Needs to be high priority real-time because jitter
 class RGBMatrix::UpdateThread : public Thread {
 public:
-  UpdateThread(struct gpio_struct *io, FrameCanvas *initial_frame)
-    : io_(io), running_(true),
+  UpdateThread(FrameCanvas *initial_frame)
+    : running_(true),
       current_frame_(initial_frame), next_frame_(NULL) {
     pthread_cond_init(&frame_done_, NULL);
   }
@@ -62,7 +62,7 @@ public:
       gettimeofday(&start, NULL);
 #endif
 
-      current_frame_->framebuffer()->DumpToMatrix(io_);
+      current_frame_->framebuffer()->DumpToMatrix();
 
       {
         MutexLock l(&frame_sync_);
@@ -96,7 +96,6 @@ private:
     return running_;
   }
 
-  struct gpio_struct *const io_;
   Mutex running_mutex_;
   bool running_;
 
@@ -106,13 +105,13 @@ private:
   FrameCanvas *next_frame_;
 };
 
-  RGBMatrix::RGBMatrix(struct gpio_struct *io, int rows, int chained_displays)
+  RGBMatrix::RGBMatrix(int rows, int chained_displays)
   : rows_(rows), chained_displays_(chained_displays),
-    io_(NULL), updater_(NULL) {
+    updater_(NULL) {
   SetTransformer(NULL);
   active_ = CreateFrameCanvas();
   Clear();
-  SetGPIO(io);
+  SetGPIO();
 }
 
 RGBMatrix::~RGBMatrix() {
@@ -122,20 +121,18 @@ RGBMatrix::~RGBMatrix() {
 
   // Make sure LEDs are off.
   active_->Clear();
-  active_->framebuffer()->DumpToMatrix(io_);
+  active_->framebuffer()->DumpToMatrix();
 
   for (size_t i = 0; i < created_frames_.size(); ++i) {
     delete created_frames_[i];
   }
 }
 
-void RGBMatrix::SetGPIO(struct gpio_struct *io) {
-  if (io == NULL) return;  // nothing to set.
-  if (io_ != NULL) return;  // already set.
-  io_ = io;
-  gpio_init_outputs(io);
-  gpio_init_pulser(io);
-  updater_ = new UpdateThread(io_, active_);
+void RGBMatrix::SetGPIO() {
+
+  gpio_init();
+
+  updater_ = new UpdateThread(active_);
   // If we have multiple processors, the kernel
   // jumps around between these, creating some global flicker.
   // So let's tie it to the last CPU available.

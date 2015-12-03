@@ -66,6 +66,13 @@
 
 static volatile uint32_t *timer1Mhz = NULL;
 
+static struct gpio_struct global_gpio;
+
+
+gpio_struct *get_gpio() {
+  return &global_gpio;
+}
+
 static uint32_t *mmap_bcm_register(off_t register_offset) {
   const off_t base = BCM2709_PERI_BASE;
 
@@ -96,44 +103,9 @@ static uint32_t *mmap_bcm_register(off_t register_offset) {
 // bit dimmer. Good values are between 100 and 200.
 static const long kBaseTimeNanos = 130;
 
-void gpio_init_pulser(struct gpio_struct *gpio) {
-  
-  const uint32_t divider = kBaseTimeNanos / 4;
-  assert(divider < (1<<12));  // we only have 12 bits.
-    
-  // Initialize timer
-  uint32_t *timereg = mmap_bcm_register(COUNTER_1Mhz_REGISTER_OFFSET);
-  timer1Mhz = timereg + 1;
-    
-  // Get relevant registers
-  volatile uint32_t *gpioReg = mmap_bcm_register(GPIO_REGISTER_OFFSET);
-  gpio->pwm_reg  = mmap_bcm_register(GPIO_PWM_BASE_OFFSET);
-  gpio->clk_reg  = mmap_bcm_register(GPIO_CLK_BASE_OFFSET);
-  gpio->fifo = gpio->pwm_reg + PWM_FIFO;
-  assert((gpio->clk_reg != NULL) && (gpio->pwm_reg != NULL));  // init error.
-  
-  //    SetGPIOMode(gpioReg, 18, 2); // set GPIO 18 to PWM0 mode (Alternative 5)
-  const int reg = 18 / 10;
-  const int mode_pos = (18 % 10) * 3;
-  gpioReg[reg] = (gpioReg[reg] & ~(7 << mode_pos)) | (2 << mode_pos);
-  
-  gpio->pwm_reg[PWM_CTL] = PWM_CTL_USEF1 | PWM_CTL_POLA1 | PWM_CTL_CLRF1;
-  
-  // reset PWM clock
-  gpio->clk_reg[CLK_PWMCTL] = CLK_PASSWD | CLK_CTL_KILL;
-  
-  // set PWM clock source as 500 MHz PLLD
-  gpio->clk_reg[CLK_PWMCTL] = CLK_PASSWD | CLK_CTL_SRC(CLK_CTL_SRC_PLLD);
-  
-  // set PWM clock divider
-  gpio->clk_reg[CLK_PWMDIV] = CLK_PASSWD | CLK_DIV_DIVI(divider) | CLK_DIV_DIVF(0);
-  
-  // enable PWM clock
-  gpio->clk_reg[CLK_PWMCTL] = CLK_PASSWD | CLK_CTL_ENAB | CLK_CTL_SRC(CLK_CTL_SRC_PLLD);
-  
-}
 
-void gpio_pulse(struct gpio_struct *gpio, int c) {
+void gpio_pulse(int c) {
+  struct gpio_struct *gpio = &global_gpio;  
   uint32_t pwm_range = 1 << (c + 1);
   if (pwm_range < 16) {
     gpio->pwm_reg[PWM_RNG1] = pwm_range;
@@ -176,22 +148,23 @@ void gpio_pulse(struct gpio_struct *gpio, int c) {
   gpio->pwm_reg[PWM_CTL] = PWM_CTL_USEF1 | PWM_CTL_PWEN1 | PWM_CTL_POLA1;
 }
 
-void gpio_wait_for_pulse(struct gpio_struct *gpio) {
+void gpio_wait_for_pulse() {
+  struct gpio_struct *gpio = &global_gpio;
   // busy wait until done.  
   while ((gpio->pwm_reg[PWM_STA] & PWM_STA_EMPT1) == 0);
 
   gpio->pwm_reg[PWM_CTL] = PWM_CTL_USEF1 | PWM_CTL_POLA1 | PWM_CTL_CLRF1;
 }
 
-void gpio_init(struct gpio_struct *gpio) {
+void gpio_init() {
+  struct gpio_struct *gpio = &global_gpio;
+
+  // Find the registers
   gpio->port = mmap_bcm_register(GPIO_REGISTER_OFFSET);
   gpio->set_bits = gpio->port + (0x1C / sizeof(uint32_t));
   gpio->clear_bits = gpio->port + (0x28 / sizeof(uint32_t));
-  printf("GPIO Port is %x\n", gpio->port);
-}
 
-void gpio_init_outputs(struct gpio_struct *gpio) {
-
+  // Set output pins
   uint32_t output_bits[] = {
     4,  // strobe
     17, // clock
@@ -213,4 +186,41 @@ void gpio_init_outputs(struct gpio_struct *gpio) {
     *(gpio->port+((b)/10)) &= ~(7<<(((b)%10)*3));
     *(gpio->port+((b)/10)) |=  (1<<(((b)%10)*3));       
   }
+
+  // Initialize pulser
+  const uint32_t divider = kBaseTimeNanos / 4;
+  assert(divider < (1<<12));  // we only have 12 bits.
+    
+  // Initialize timer
+  uint32_t *timereg = mmap_bcm_register(COUNTER_1Mhz_REGISTER_OFFSET);
+  timer1Mhz = timereg + 1;
+    
+  // Get relevant registers
+  volatile uint32_t *gpioReg = mmap_bcm_register(GPIO_REGISTER_OFFSET);
+  gpio->pwm_reg  = mmap_bcm_register(GPIO_PWM_BASE_OFFSET);
+  gpio->clk_reg  = mmap_bcm_register(GPIO_CLK_BASE_OFFSET);
+  gpio->fifo = gpio->pwm_reg + PWM_FIFO;
+  assert((gpio->clk_reg != NULL) && (gpio->pwm_reg != NULL));  // init error.
+  
+  //    SetGPIOMode(gpioReg, 18, 2); // set GPIO 18 to PWM0 mode (Alternative 5)
+  const int reg = 18 / 10;
+  const int mode_pos = (18 % 10) * 3;
+  gpioReg[reg] = (gpioReg[reg] & ~(7 << mode_pos)) | (2 << mode_pos);
+  
+  gpio->pwm_reg[PWM_CTL] = PWM_CTL_USEF1 | PWM_CTL_POLA1 | PWM_CTL_CLRF1;
+  
+  // reset PWM clock
+  gpio->clk_reg[CLK_PWMCTL] = CLK_PASSWD | CLK_CTL_KILL;
+  
+  // set PWM clock source as 500 MHz PLLD
+  gpio->clk_reg[CLK_PWMCTL] = CLK_PASSWD | CLK_CTL_SRC(CLK_CTL_SRC_PLLD);
+  
+  // set PWM clock divider
+  gpio->clk_reg[CLK_PWMDIV] = CLK_PASSWD | CLK_DIV_DIVI(divider) | CLK_DIV_DIVF(0);
+  
+  // enable PWM clock
+  gpio->clk_reg[CLK_PWMCTL] = CLK_PASSWD | CLK_CTL_ENAB | CLK_CTL_SRC(CLK_CTL_SRC_PLLD);
+
 }
+
+
