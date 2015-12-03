@@ -47,7 +47,6 @@ enum {
     for (j = 0; j < 11; j++)
       for (k = 0; k < 3; k++)
         color_buffer[i][j][k] = 0;
-
   }
   
 Framebuffer::Framebuffer(int rows, int columns)
@@ -59,13 +58,6 @@ Framebuffer::Framebuffer(int rows, int columns)
   assert(rows_ <= 32);
 }
 
-
-/* static */ void Framebuffer::InitGPIO(struct gpio_struct *io) {
-  
-  // Initialize outputs, make sure that all of these are supported bits.
-  gpio_init_outputs(io);
-  gpio_init_pulser(io);
-}
 
 // Do CIE1931 luminance correction and scale to output bitplanes
 static uint16_t luminance_cie1931(uint8_t c, uint8_t brightness) {

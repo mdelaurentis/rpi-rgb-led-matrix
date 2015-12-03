@@ -29,15 +29,10 @@ struct gpio_struct {
 
 
 void gpio_init_pulser(struct gpio_struct *gpio);
-  
-  // Send a pulse with a given length (index into nano_wait_spec array).
 void gpio_pulse(struct gpio_struct *gpio, int c);
-
 void gpio_wait_for_pulse(struct gpio_struct *gpio);
-
 void gpio_init(struct gpio_struct * gpio);
 void gpio_init_outputs(struct gpio_struct * gpio);
-// void gpio_set(struct gpio_struct *gpio, uint32_t);
 
 #endif  // RPI_GPIO_H
 

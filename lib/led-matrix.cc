@@ -133,7 +133,8 @@ void RGBMatrix::SetGPIO(struct gpio_struct *io) {
   if (io == NULL) return;  // nothing to set.
   if (io_ != NULL) return;  // already set.
   io_ = io;
-  internal::Framebuffer::InitGPIO(io_);
+  gpio_init_outputs(io);
+  gpio_init_pulser(io);
   updater_ = new UpdateThread(io_, active_);
   // If we have multiple processors, the kernel
   // jumps around between these, creating some global flicker.

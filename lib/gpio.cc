@@ -177,15 +177,6 @@ void gpio_pulse(struct gpio_struct *gpio, int c) {
 }
 
 void gpio_wait_for_pulse(struct gpio_struct *gpio) {
-  // Determine how long we already spent and sleep to get close to the
-  // actual end-time of our sleep period.
-  // (substract 25 usec, as this is the OS overhead).
-  //  const uint32_t elapsed_usec = *timer1Mhz - start_time_;
-  // const int to_sleep = sleep_hint_ - elapsed_usec - 25;
-  //if (to_sleep > 0) {
-  //    struct timespec sleep_time = { 0, 1000 * to_sleep };
-  //    nanosleep(&sleep_time, NULL);
-  //  }
   // busy wait until done.  
   while ((gpio->pwm_reg[PWM_STA] & PWM_STA_EMPT1) == 0);
 

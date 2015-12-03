@@ -29,9 +29,6 @@ class Framebuffer {
 public:
   Framebuffer(int rows, int columns);
 
-  // Initialize GPIO bits for output. Only call once.
-  static void InitGPIO(struct gpio_struct *io);
-
   // Map brightness of output linearly to input with CIE1931 profile.
   void set_luminance_correct(bool on) { do_luminance_correct_ = on; }
   bool luminance_correct() const { return do_luminance_correct_; }
