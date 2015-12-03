@@ -96,115 +96,108 @@ static uint32_t *mmap_bcm_register(off_t register_offset) {
 // bit dimmer. Good values are between 100 and 200.
 static const long kBaseTimeNanos = 130;
 
-namespace rgb_matrix {
-
-  PinPulser::PinPulser() {
-
-    const uint32_t divider = kBaseTimeNanos / 4;
-    assert(divider < (1<<12));  // we only have 12 bits.
-    
-    // Initialize timer
-    uint32_t *timereg = mmap_bcm_register(COUNTER_1Mhz_REGISTER_OFFSET);
-    timer1Mhz = timereg + 1;
-    
-    // 11 bit planes    
-    for (size_t i = 0; i < 11; ++i) {
-      sleep_hints_[i] = (kBaseTimeNanos << i) / 1000;
-    }
-    
-    // Get relevant registers
-    volatile uint32_t *gpioReg = mmap_bcm_register(GPIO_REGISTER_OFFSET);
-    pwm_reg_  = mmap_bcm_register(GPIO_PWM_BASE_OFFSET);
-    clk_reg_  = mmap_bcm_register(GPIO_CLK_BASE_OFFSET);
-    fifo_ = pwm_reg_ + PWM_FIFO;
-    assert((clk_reg_ != NULL) && (pwm_reg_ != NULL));  // init error.
-
-    //    SetGPIOMode(gpioReg, 18, 2); // set GPIO 18 to PWM0 mode (Alternative 5)
-    const int reg = 18 / 10;
-    const int mode_pos = (18 % 10) * 3;
-    gpioReg[reg] = (gpioReg[reg] & ~(7 << mode_pos)) | (2 << mode_pos);
-
-    pwm_reg_[PWM_CTL] = PWM_CTL_USEF1 | PWM_CTL_POLA1 | PWM_CTL_CLRF1;
-
-    // reset PWM clock
-    clk_reg_[CLK_PWMCTL] = CLK_PASSWD | CLK_CTL_KILL;
-
-    // set PWM clock source as 500 MHz PLLD
-    clk_reg_[CLK_PWMCTL] = CLK_PASSWD | CLK_CTL_SRC(CLK_CTL_SRC_PLLD);
-
-    // set PWM clock divider
-    clk_reg_[CLK_PWMDIV] = CLK_PASSWD | CLK_DIV_DIVI(divider) | CLK_DIV_DIVF(0);
-
-    // enable PWM clock
-    clk_reg_[CLK_PWMCTL] = CLK_PASSWD | CLK_CTL_ENAB | CLK_CTL_SRC(CLK_CTL_SRC_PLLD);
-
-  }
-
-  void PinPulser::SendPulse(int c) {
-    uint32_t pwm_range = 1 << (c + 1);
-    if (pwm_range < 16) {
-      pwm_reg_[PWM_RNG1] = pwm_range;
-
-      *fifo_ = pwm_range;
-    } else {
-      // Keep the actual range as short as possible, as we have to
-      // wait for one full period of these in the zero phase.
-      // The hardware can't deal with values < 2, so only do this when
-      // have enough of these.
-      pwm_reg_[PWM_RNG1] = pwm_range / 8;
-
-      *fifo_ = pwm_range / 8;
-      *fifo_ = pwm_range / 8;
-      *fifo_ = pwm_range / 8;
-      *fifo_ = pwm_range / 8;
-      *fifo_ = pwm_range / 8;
-      *fifo_ = pwm_range / 8;
-      *fifo_ = pwm_range / 8;
-      *fifo_ = pwm_range / 8;
-    }
-
-    /*
-     * We need one value at the end to have it go back to
-     * default state (otherwise it just repeats the last
-     * value, so will be constantly 'on').
-     */
-    *fifo_ = 0;   // sentinel.
-
-    /*
-     * For some reason, we need a second empty sentinel in the
-     * fifo, otherwise our way to detect the end of the pulse,
-     * which relies on 'is the queue empty' does not work. It is
-     * not entirely clear why that is from the datasheet,
-     * but probably there is some buffering register in which data
-     * elements are kept after the fifo is emptied.
-     */
-    *fifo_ = 0;
-
-    sleep_hint_ = sleep_hints_[c];
-    start_time_ = *timer1Mhz;
-    pwm_reg_[PWM_CTL] = PWM_CTL_USEF1 | PWM_CTL_PWEN1 | PWM_CTL_POLA1;
-  }
-
-  void PinPulser::WaitPulseFinished() {
-    // Determine how long we already spent and sleep to get close to the
-    // actual end-time of our sleep period.
-    // (substract 25 usec, as this is the OS overhead).
-    const uint32_t elapsed_usec = *timer1Mhz - start_time_;
-    const int to_sleep = sleep_hint_ - elapsed_usec - 25;
-    if (to_sleep > 0) {
-      struct timespec sleep_time = { 0, 1000 * to_sleep };
-      nanosleep(&sleep_time, NULL);
-    }
-    while ((pwm_reg_[PWM_STA] & PWM_STA_EMPT1) == 0) {
-      // busy wait until done.
-    }
-    pwm_reg_[PWM_CTL] = PWM_CTL_USEF1 | PWM_CTL_POLA1 | PWM_CTL_CLRF1;
-  }
+PinPulser::PinPulser() {
   
+  const uint32_t divider = kBaseTimeNanos / 4;
+  assert(divider < (1<<12));  // we only have 12 bits.
+    
+  // Initialize timer
+  uint32_t *timereg = mmap_bcm_register(COUNTER_1Mhz_REGISTER_OFFSET);
+  timer1Mhz = timereg + 1;
+    
+  // 11 bit planes    
+  for (size_t i = 0; i < 11; ++i) {
+    sleep_hints_[i] = (kBaseTimeNanos << i) / 1000;
+  }
+    
+  // Get relevant registers
+  volatile uint32_t *gpioReg = mmap_bcm_register(GPIO_REGISTER_OFFSET);
+  pwm_reg_  = mmap_bcm_register(GPIO_PWM_BASE_OFFSET);
+  clk_reg_  = mmap_bcm_register(GPIO_CLK_BASE_OFFSET);
+  fifo_ = pwm_reg_ + PWM_FIFO;
+  assert((clk_reg_ != NULL) && (pwm_reg_ != NULL));  // init error.
+  
+  //    SetGPIOMode(gpioReg, 18, 2); // set GPIO 18 to PWM0 mode (Alternative 5)
+  const int reg = 18 / 10;
+  const int mode_pos = (18 % 10) * 3;
+  gpioReg[reg] = (gpioReg[reg] & ~(7 << mode_pos)) | (2 << mode_pos);
+  
+  pwm_reg_[PWM_CTL] = PWM_CTL_USEF1 | PWM_CTL_POLA1 | PWM_CTL_CLRF1;
+  
+  // reset PWM clock
+  clk_reg_[CLK_PWMCTL] = CLK_PASSWD | CLK_CTL_KILL;
+  
+  // set PWM clock source as 500 MHz PLLD
+  clk_reg_[CLK_PWMCTL] = CLK_PASSWD | CLK_CTL_SRC(CLK_CTL_SRC_PLLD);
+  
+  // set PWM clock divider
+  clk_reg_[CLK_PWMDIV] = CLK_PASSWD | CLK_DIV_DIVI(divider) | CLK_DIV_DIVF(0);
+  
+  // enable PWM clock
+  clk_reg_[CLK_PWMCTL] = CLK_PASSWD | CLK_CTL_ENAB | CLK_CTL_SRC(CLK_CTL_SRC_PLLD);
+  
+}
 
-} // namespace rgb_matrix
+void PinPulser::SendPulse(int c) {
+  uint32_t pwm_range = 1 << (c + 1);
+  if (pwm_range < 16) {
+    pwm_reg_[PWM_RNG1] = pwm_range;
+    
+    *fifo_ = pwm_range;
+  } else {
+    // Keep the actual range as short as possible, as we have to
+    // wait for one full period of these in the zero phase.
+    // The hardware can't deal with values < 2, so only do this when
+    // have enough of these.
+    pwm_reg_[PWM_RNG1] = pwm_range / 8;
+    
+    *fifo_ = pwm_range / 8;
+    *fifo_ = pwm_range / 8;
+    *fifo_ = pwm_range / 8;
+    *fifo_ = pwm_range / 8;
+    *fifo_ = pwm_range / 8;
+    *fifo_ = pwm_range / 8;
+    *fifo_ = pwm_range / 8;
+    *fifo_ = pwm_range / 8;
+  }
 
+  /*
+   * We need one value at the end to have it go back to
+   * default state (otherwise it just repeats the last
+   * value, so will be constantly 'on').
+   */
+  *fifo_ = 0;   // sentinel.
 
+  /*
+   * For some reason, we need a second empty sentinel in the
+   * fifo, otherwise our way to detect the end of the pulse,
+   * which relies on 'is the queue empty' does not work. It is
+   * not entirely clear why that is from the datasheet,
+   * but probably there is some buffering register in which data
+   * elements are kept after the fifo is emptied.
+   */
+  *fifo_ = 0;
+  
+  sleep_hint_ = sleep_hints_[c];
+  start_time_ = *timer1Mhz;
+  pwm_reg_[PWM_CTL] = PWM_CTL_USEF1 | PWM_CTL_PWEN1 | PWM_CTL_POLA1;
+}
+
+void PinPulser::WaitPulseFinished() {
+  // Determine how long we already spent and sleep to get close to the
+  // actual end-time of our sleep period.
+  // (substract 25 usec, as this is the OS overhead).
+  const uint32_t elapsed_usec = *timer1Mhz - start_time_;
+  const int to_sleep = sleep_hint_ - elapsed_usec - 25;
+  if (to_sleep > 0) {
+    struct timespec sleep_time = { 0, 1000 * to_sleep };
+    nanosleep(&sleep_time, NULL);
+  }
+  while ((pwm_reg_[PWM_STA] & PWM_STA_EMPT1) == 0) {
+    // busy wait until done.
+  }
+  pwm_reg_[PWM_CTL] = PWM_CTL_USEF1 | PWM_CTL_POLA1 | PWM_CTL_CLRF1;
+}
 
 void gpio_init(struct gpio_struct *gpio) {
   gpio->port = mmap_bcm_register(GPIO_REGISTER_OFFSET);

@@ -19,8 +19,7 @@
 #include "gpio.h"
 
 namespace rgb_matrix {
-class GPIO;
-class PinPulser;
+
 namespace internal {
 // Internal representation of the frame-buffer that as well can
 // write itself to GPIO.

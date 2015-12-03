@@ -18,18 +18,12 @@
 
 #include <stdint.h>
 
-#include <vector>
-
 struct gpio_struct {
   volatile uint32_t *port;
   volatile uint32_t *set_bits;
   volatile uint32_t *clear_bits;
 };
 
-
-// Putting this in our namespace to not collide with other things called like
-// this.
-namespace rgb_matrix {
 
 // A PinPulser is a utility class that pulses a GPIO pin.
 class PinPulser {
@@ -52,7 +46,6 @@ private:
   int sleep_hint_;  
 };
 
-}  // end namespace rgb_matrix
 
 void gpio_init(struct gpio_struct * gpio);
 void gpio_init_outputs(struct gpio_struct * gpio);
