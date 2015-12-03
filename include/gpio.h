@@ -38,12 +38,9 @@ public:
   void WaitPulseFinished();
 
 private:
-  int sleep_hints_[11];
   volatile uint32_t *pwm_reg_;
   volatile uint32_t *fifo_;
   volatile uint32_t *clk_reg_;
-  uint32_t start_time_;
-  int sleep_hint_;  
 };
 
 

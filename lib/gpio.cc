@@ -105,11 +105,6 @@ PinPulser::PinPulser() {
   uint32_t *timereg = mmap_bcm_register(COUNTER_1Mhz_REGISTER_OFFSET);
   timer1Mhz = timereg + 1;
     
-  // 11 bit planes    
-  for (size_t i = 0; i < 11; ++i) {
-    sleep_hints_[i] = (kBaseTimeNanos << i) / 1000;
-  }
-    
   // Get relevant registers
   volatile uint32_t *gpioReg = mmap_bcm_register(GPIO_REGISTER_OFFSET);
   pwm_reg_  = mmap_bcm_register(GPIO_PWM_BASE_OFFSET);
@@ -178,8 +173,6 @@ void PinPulser::SendPulse(int c) {
    */
   *fifo_ = 0;
   
-  sleep_hint_ = sleep_hints_[c];
-  start_time_ = *timer1Mhz;
   pwm_reg_[PWM_CTL] = PWM_CTL_USEF1 | PWM_CTL_PWEN1 | PWM_CTL_POLA1;
 }
 
@@ -187,15 +180,15 @@ void PinPulser::WaitPulseFinished() {
   // Determine how long we already spent and sleep to get close to the
   // actual end-time of our sleep period.
   // (substract 25 usec, as this is the OS overhead).
-  const uint32_t elapsed_usec = *timer1Mhz - start_time_;
-  const int to_sleep = sleep_hint_ - elapsed_usec - 25;
-  if (to_sleep > 0) {
-    struct timespec sleep_time = { 0, 1000 * to_sleep };
-    nanosleep(&sleep_time, NULL);
-  }
-  while ((pwm_reg_[PWM_STA] & PWM_STA_EMPT1) == 0) {
-    // busy wait until done.
-  }
+  //  const uint32_t elapsed_usec = *timer1Mhz - start_time_;
+  // const int to_sleep = sleep_hint_ - elapsed_usec - 25;
+  //if (to_sleep > 0) {
+  //    struct timespec sleep_time = { 0, 1000 * to_sleep };
+  //    nanosleep(&sleep_time, NULL);
+  //  }
+  // busy wait until done.  
+  while ((pwm_reg_[PWM_STA] & PWM_STA_EMPT1) == 0);
+
   pwm_reg_[PWM_CTL] = PWM_CTL_USEF1 | PWM_CTL_POLA1 | PWM_CTL_CLRF1;
 }
 
