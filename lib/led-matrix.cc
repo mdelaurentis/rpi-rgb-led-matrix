@@ -148,7 +148,7 @@ void RGBMatrix::SetGPIO(struct gpio_struct *io) {
 
 FrameCanvas *RGBMatrix::CreateFrameCanvas() {
   FrameCanvas *result =
-    new FrameCanvas(new internal::Framebuffer(rows_, 32 * chained_displays_));
+    new FrameCanvas(new Framebuffer(rows_, 32 * chained_displays_));
   if (created_frames_.empty()) {
     // First time. Get defaults from initial Framebuffer.
     do_luminance_correct_ = result->framebuffer()->luminance_correct();

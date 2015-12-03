@@ -29,9 +29,6 @@
 
 uint32_t color_buffer[16][11][3];
 
-
-namespace rgb_matrix {
-namespace internal {
 enum {
   kBitPlanes = 8  // maximum usable bitplanes.
 };
@@ -196,5 +193,3 @@ void Framebuffer::DumpToMatrix(struct gpio_struct *io) {
     gpio_wait_for_pulse(io);
   }
 }
-}  // namespace internal
-}  // namespace rgb_matrix

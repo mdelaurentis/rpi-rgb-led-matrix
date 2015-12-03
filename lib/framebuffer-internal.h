@@ -18,9 +18,6 @@
 #include <stdint.h>
 #include "gpio.h"
 
-namespace rgb_matrix {
-
-namespace internal {
 // Internal representation of the frame-buffer that as well can
 // write itself to GPIO.
 // Our internal memory layout mimicks as much as possible what needs to be
@@ -61,6 +58,5 @@ private:
   uint8_t brightness_;
 
 };
-}  // namespace internal
-}  // namespace rgb_matrix
+
 #endif // RPI_RGBMATRIX_FRAMEBUFFER_INTERNAL_H

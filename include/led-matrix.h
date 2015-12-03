@@ -28,9 +28,11 @@
 #include "thread.h"
 #include "transformer.h"
 
+class Framebuffer;
+
 namespace rgb_matrix {
 class FrameCanvas;   // Canvas for Double- and Multibuffering
-namespace internal { class Framebuffer; }
+
 
 // The RGB matrix provides the framebuffer and the facilities to constantly
 // update the LED matrix.
@@ -163,11 +165,11 @@ public:
 private:
   friend class RGBMatrix;
 
-  FrameCanvas(internal::Framebuffer *frame) : frame_(frame){}
+  FrameCanvas(Framebuffer *frame) : frame_(frame){}
 
-  internal::Framebuffer *framebuffer() { return frame_; }
+  Framebuffer *framebuffer() { return frame_; }
 
-  internal::Framebuffer *const frame_;
+  Framebuffer *const frame_;
 };
 }  // end namespace rgb_matrix
 #endif  // RPI_RGBMATRIX_H
