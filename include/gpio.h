@@ -21,7 +21,6 @@
 #include <vector>
 
 struct gpio_struct {
-  uint32_t output_bits;
   volatile uint32_t *port;
   volatile uint32_t *set_bits;
   volatile uint32_t *clear_bits;
@@ -36,8 +35,6 @@ namespace rgb_matrix {
 class PinPulser {
 public:
 
-  ~PinPulser();
-
   PinPulser(int kBaseTimeNanos);
   
   // Send a pulse with a given length (index into nano_wait_spec array).
@@ -47,8 +44,8 @@ public:
   void WaitPulseFinished();
 
 private:
-  std::vector<uint32_t> pwm_range_;
-  std::vector<int> sleep_hints_;
+  uint32_t pwm_range_[11];
+  int sleep_hints_[11];
   volatile uint32_t *pwm_reg_;
   volatile uint32_t *fifo_;
   volatile uint32_t *clk_reg_;
@@ -59,7 +56,7 @@ private:
 }  // end namespace rgb_matrix
 
 void gpio_init(struct gpio_struct * gpio);
-void gpio_init_outputs(struct gpio_struct * gpio, uint32_t);
+void gpio_init_outputs(struct gpio_struct * gpio);
 // void gpio_set(struct gpio_struct *gpio, uint32_t);
 
 #endif  // RPI_GPIO_H

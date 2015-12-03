@@ -71,43 +71,6 @@ private:
   bool do_luminance_correct_;
   uint8_t brightness_;
 
-  // Standard pinout since July 2015
-  // This uses the PWM pin to create the timing.
-  union IoBits {
-    struct {
-      // This bitset reflects the GPIO mapping. The naming of the
-      // pins of type 'p0_r1' means 'first parallel chain, red-bit one'
-      //                                 GPIO Header-pos
-      unsigned int unused_0_1_2_3 : 4;  //  0..1  (only on RPi 1, Revision 1)
-      unsigned int strobe         : 1;  //  4 P1-07
-      unsigned int unused_5_6     : 2;
-      // TODO: be able to disable chain 0 for higher-pin RPis to gain SPI back.
-      unsigned int p0_b1          : 1;  //  7 P1-26 (masks: SPI0_CE1)
-      unsigned int p0_r2          : 1;  //  8 P1-24 (masks: SPI0_CE0)
-      unsigned int p0_g2          : 1;  //  9 P1-21 (masks: SPI0_MISO
-      unsigned int p0_b2          : 1;  // 10 P1-19 (masks: SPI0_MOSI)
-      unsigned int p0_r1          : 1;  // 11 P1-23 (masks: SPI0_SCKL)
-
-      unsigned int unused_12_13_14_15_16 : 5;
-
-      unsigned int clock          : 1;  // 17 P1-11
-
-      unsigned int output_enable  : 1;  // 18 P1-12 (PWM pin: our timing)
-
-      unsigned int unused_19_20_21 : 3;
-      
-      unsigned int a              : 1;  // 22 P1-15  // row bits.
-      unsigned int b              : 1;  // 23 P1-16
-      unsigned int c              : 1;  // 24 P1-18
-
-      unsigned int unused_25_26   : 2;
-      
-      unsigned int p0_g1          : 1;  // 27 P1-13 (Not on RPi1, Rev1)
-    } bits;
-    uint32_t raw;
-    IoBits() : raw(0) {}
-  };
-
 };
 }  // namespace internal
 }  // namespace rgb_matrix

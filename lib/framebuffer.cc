@@ -68,24 +68,8 @@ Framebuffer::Framebuffer(int rows, int columns)
   if (sOutputEnablePulser != NULL)
     return;  // already initialized.
 
-  // Tell GPIO about all bits we intend to use.
-  IoBits b;
-  b.raw = 0;
-  b.bits.output_enable = 1;
-  b.bits.clock = 1;
-  b.bits.strobe = 1;
-
-  b.bits.p0_r1 = b.bits.p0_g1 = b.bits.p0_b1 = 1;
-  b.bits.p0_r2 = b.bits.p0_g2 = b.bits.p0_b2 = 1;
-
-  b.bits.a = b.bits.b = b.bits.c = 1;
-
   // Initialize outputs, make sure that all of these are supported bits.
-  gpio_init_outputs(io, b.raw);
-
-  // Now, set up the PinPulser for output enable.
-  IoBits output_enable_bits;
-  output_enable_bits.bits.output_enable = 1;
+  gpio_init_outputs(io);
 
   sOutputEnablePulser = new PinPulser(kBaseTimeNanos);
 }

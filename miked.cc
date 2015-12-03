@@ -8,31 +8,10 @@
 #include "led-matrix.h"
 
 #include <unistd.h>
-#include <math.h>
-#include <stdio.h>
 #include "gpio.h"
 using rgb_matrix::RGBMatrix;
 using rgb_matrix::Canvas;
 
-static void DrawOnCanvas(Canvas *canvas) {
-  /*
-   * Let's create a simple animation. We use the canvas to draw
-   * pixels. We wait between each step to have a slower animation.
-   */
-  canvas->Fill(0, 0, 255);
-
-  int center_x = canvas->width() / 2;
-  int center_y = canvas->height() / 2;
-  float radius_max = canvas->width() / 2;
-  float angle_step = 1.0 / 360;
-  for (float a = 0, r = 0; r < radius_max; a += angle_step, r += angle_step) {
-    float dot_x = cos(a * 2 * M_PI) * r;
-    float dot_y = sin(a * 2 * M_PI) * r;
-    canvas->SetPixel(center_x + dot_x, center_y + dot_y,
-                     255, 0, 0);
-    usleep(1 * 1000);  // wait a little to slow down things.
-  }
-}
 
 int main(int argc, char *argv[]) {
   /*
@@ -48,10 +27,6 @@ int main(int argc, char *argv[]) {
   int chain = 1;    // Number of boards chained together.
   Canvas *canvas = new RGBMatrix(&io, rows, chain);
 
-  // DrawOnCanvas(canvas);    // Using the canvas.
-  // canvas->Fill(0, 0, 255);
-
-  printf("Here\n");
   for (int t = 0; t < 255; t++) {
     int b = t;
     for (int x = 0; x < 32; x++) {
@@ -59,14 +34,12 @@ int main(int argc, char *argv[]) {
         int r = 255 * (x / 32.0);
         int g = 255 * (y / 16.0);
         canvas->SetPixel(x, y, r, g, b);
-        usleep(10);
+        usleep(1);
       }
     }
   }
-  printf("Sleeping\n");
   usleep(1000 * 1000 * 3);
-  printf("Done\n");
-  // Animation finished. Shut down the RGB matrix.
+
   canvas->Clear();
   delete canvas;
 

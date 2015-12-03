@@ -105,12 +105,11 @@ namespace rgb_matrix {
     timer1Mhz = timereg + 1;
     
     // 11 bit planes    
-    int specs[11];
     for (size_t i = 0; i < 11; ++i) {
-      printf("Adding bitplane timing %ld\n", base << i);
-      specs[i] = base << i;
-      sleep_hints_.push_back(specs[i] / 1000);
-      pwm_range_.push_back(2 * specs[i] / base);
+      sleep_hints_[i] = (base << i) / 1000;
+      pwm_range_[i] = 2 * (base << i) / base;
+      printf("Added sleep hint %d and pwm range %d\n",
+             sleep_hints_[i], pwm_range_[i]);
     }
     
     // Get relevant registers
@@ -212,12 +211,27 @@ void gpio_init(struct gpio_struct *gpio) {
   printf("GPIO Port is %x\n", gpio->port);
 }
 
-void gpio_init_outputs(struct gpio_struct *gpio, uint32_t outputs) {
-  gpio->output_bits = outputs;
-  for (uint32_t b = 0; b <= 27; ++b) {
-    if (outputs & (1 << b)) {
-      *(gpio->port+((b)/10)) &= ~(7<<(((b)%10)*3));
-      *(gpio->port+((b)/10)) |=  (1<<(((b)%10)*3));       
-    }
+void gpio_init_outputs(struct gpio_struct *gpio) {
+
+  uint32_t output_bits[] = {
+    4,  // strobe
+    17, // clock
+    18, // output enable
+
+    22, 23, 24, // a, b, c
+
+    7,  // b1
+    8,  // r2
+    9,  // g2
+    10, // b2
+    11, // r1
+    27 // g1
+  };
+
+  int i = 0;
+  for (i = 0; i < 12; i++) {
+    int b = output_bits[i];
+    *(gpio->port+((b)/10)) &= ~(7<<(((b)%10)*3));
+    *(gpio->port+((b)/10)) |=  (1<<(((b)%10)*3));       
   }
 }
