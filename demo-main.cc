@@ -1226,7 +1226,7 @@ int main(int argc, char *argv[]) {
   int brightness = 100;
   int rotation = 0;
   bool large_display = false;
-  bool do_luminance_correct = true;
+
 
   const char *demo_parameter = NULL;
 
@@ -1259,10 +1259,6 @@ int main(int argc, char *argv[]) {
 
     case 'b':
       brightness = atoi(optarg);
-      break;
-
-    case 'l':
-      do_luminance_correct = !do_luminance_correct;
       break;
 
     case 'L':
@@ -1332,7 +1328,6 @@ int main(int argc, char *argv[]) {
 
   // The matrix, our 'frame buffer' and display updater.
   RGBMatrix *matrix = new RGBMatrix(rows, chain);
-  matrix->set_luminance_correct(do_luminance_correct);
   matrix->SetBrightness(brightness);
 
   LinkedTransformer *transformer = new LinkedTransformer();

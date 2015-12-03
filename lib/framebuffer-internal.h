@@ -26,10 +26,6 @@ class Framebuffer {
 public:
   Framebuffer(int rows, int columns);
 
-  // Map brightness of output linearly to input with CIE1931 profile.
-  void set_luminance_correct(bool on) { do_luminance_correct_ = on; }
-  bool luminance_correct() const { return do_luminance_correct_; }
-
   // Set brightness in percent; range=1..100
   // This will only affect newly set pixels.
   void SetBrightness(uint8_t b) {
@@ -54,7 +50,6 @@ private:
   const int rows_;     // Number of rows. 16 or 32.
   const int columns_;  // Number of columns. Number of chained boards * 32.
 
-  bool do_luminance_correct_;
   uint8_t brightness_;
 
 };

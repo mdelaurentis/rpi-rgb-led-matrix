@@ -71,10 +71,6 @@ public:
   // Starts display refresh thread if this is the first setting.
   void SetGPIO();
 
-  // Map brightness of output linearly to input with CIE1931 profile.
-  void set_luminance_correct(bool on);
-  bool luminance_correct() const;
-
   // Set brightness in percent. 1%..100%.
   // This will only affect newly set pixels.
   void SetBrightness(uint8_t brightness);
@@ -126,7 +122,6 @@ private:
   const int chained_displays_;
 
   uint8_t pwm_bits_;
-  bool do_luminance_correct_;
   uint8_t brightness_;
 
   FrameCanvas *active_;
@@ -145,10 +140,6 @@ public:
   // Returns boolean to signify if value was within range.
   bool SetPWMBits(uint8_t value);
   uint8_t pwmbits();
-
-  // Map brightness of output linearly to input with CIE1931 profile.
-  void set_luminance_correct(bool on);
-  bool luminance_correct() const;
 
   void SetBrightness(uint8_t brightness);
   uint8_t brightness();
