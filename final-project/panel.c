@@ -69,9 +69,6 @@ struct gpio_struct {
   volatile uint32_t *clear_bits;
   volatile uint32_t *pwm_reg;
   volatile uint32_t *pwm_ctl;
-  volatile uint32_t *pwm_sta;
-  volatile uint32_t *pwm_rng1;
-  volatile uint32_t *pwm_fifo;
   
 } the_gpio_struct;
 
@@ -103,48 +100,14 @@ static uint32_t *mmap_bcm_register(off_t register_offset) {
   return result;
 }
 
-
-
-void gpio_pulse(int c) {
-  
-  uint32_t pwm_range = 1 << (c + 1);
-
-  *gpio->pwm_rng1 = pwm_range;
-  *gpio->pwm_fifo = pwm_range;
-
-  /*
-   * We need one value at the end to have it go back to
-   * default state (otherwise it just repeats the last
-   * value, so will be constantly 'on').
-   */
-  *gpio->pwm_fifo = 0;   // sentinel.
-
-  /*
-   * For some reason, we need a second empty sentinel in the
-   * fifo, otherwise our way to detect the end of the pulse,
-   * which relies on 'is the queue empty' does not work. It is
-   * not entirely clear why that is from the datasheet,
-   * but probably there is some buffering register in which data
-   * elements are kept after the fifo is emptied.
-   */
-  *gpio->pwm_fifo = 0;
-
-  *gpio->pwm_ctl =  PWEN1 | POLA1 | USEF1;
-}
-
-void gpio_wait_for_pulse() {
-  // Wait until the EMPT1 of the STA register is set.
-  while (!(*gpio->pwm_sta & 0x2));
-
-  *gpio->pwm_ctl = USEF1 | POLA1 | CLRF1;
-}
-
 void gpio_init() {
   gpio->port = mmap_bcm_register(GPIO_REGISTER_OFFSET);
   gpio->set_bits = gpio->port + (0x1C / sizeof(uint32_t));
   gpio->clear_bits = gpio->port + (0x28 / sizeof(uint32_t));
   printf("GPIO Port is %x\n", gpio->port);
-
+  int i = 0;
+  uint32_t divider = BASE_TIME_NANOS / 4;
+  
   uint32_t output_bits[] = {
     4,  // strobe
     17, // clock
@@ -160,14 +123,11 @@ void gpio_init() {
     27 // g1
   };
 
-  int i = 0;
   for (i = 0; i < 12; i++) {
     int b = output_bits[i];
     *(gpio->port+((b)/10)) &= ~(7<<(((b)%10)*3));
     *(gpio->port+((b)/10)) |=  (1<<(((b)%10)*3));       
   }
-  
-   uint32_t divider = BASE_TIME_NANOS / 4;
    // divider = 16;
   assert(divider < (1<<12));  // we only have 12 bits.
 
@@ -175,9 +135,6 @@ void gpio_init() {
   // Get relevant registers
   gpio->pwm_reg  = mmap_bcm_register(GPIO_PWM_BASE_OFFSET);
   gpio->pwm_ctl = gpio->pwm_reg;
-  gpio->pwm_sta = gpio->pwm_reg + 1;
-  gpio->pwm_rng1 = gpio->pwm_reg + 4;
-  gpio->pwm_fifo = gpio->pwm_reg + 6;
   
   // set GPIO 18 to PWM0 mode (Alternative 5)
   volatile uint32_t *gpioReg = mmap_bcm_register(GPIO_REGISTER_OFFSET);
@@ -270,6 +227,14 @@ void buf_flush() {
 
   uint32_t color_mask = 1 << 7 | 1 << 8 | 1 << 9 | 1 << 10 | 1 << 11 | 1 << 27;
 
+  volatile uint32_t *ctl  = gpio->pwm_reg;
+  volatile uint32_t *sta  = gpio->pwm_reg + 0x4  / 4;
+  volatile uint32_t *rng1 = gpio->pwm_reg + 0x10 / 4;    
+  volatile uint32_t *fifo = gpio->pwm_reg + 0x18 / 4;
+
+
+
+  
   for (d_row = 0; d_row < ROWS / 2; ++d_row) {
     uint32_t row_addr = d_row << 22;
     
@@ -318,17 +283,25 @@ void buf_flush() {
       *(gpio->clear_bits) = (1 << 17) | color_mask;
       
       // OE of the previous row-data must be finished before strobe.
-      gpio_wait_for_pulse();
+      while (!(*sta & 0x2));
+      *gpio->pwm_ctl = USEF1 | POLA1 | CLRF1;      
 
       // Set and clear the strobe (bit 4)
       *(gpio->set_bits) = 1 << 4;
       *(gpio->clear_bits) = 1 << 4;
 
       // Now switch on for the sleep time necessary for that bit-plane.
-      gpio_pulse(b);
+      uint32_t pwm_range = 1 << (b + 1);
+  
+      *rng1 = pwm_range;
+      *fifo = pwm_range;
+      *fifo = 0;
+      *fifo = 0;
+      *ctl =  PWEN1 | POLA1 | USEF1;
 
     }
-    gpio_wait_for_pulse();
+    while (!(*sta & 0x2));
+    *gpio->pwm_ctl = USEF1 | POLA1 | CLRF1;      
   }
 }
 
@@ -338,7 +311,7 @@ int main(int argc, char **argv) {
   gpio_init();
   init_buffer();
 
-  for (t = 0; t < 255; t += 32) {
+  for (t = 0; t < 255; t += 8) {
     int b = t;
     for (x = 0; x < 32; x++) {
       for (y = 0; y < 16; y++) {
