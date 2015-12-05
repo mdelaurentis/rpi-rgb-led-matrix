@@ -64,7 +64,7 @@ struct gpio_struct {
   volatile uint32_t *set_bits;
   volatile uint32_t *clear_bits;
   volatile uint32_t *pwm_reg;
-  volatile uint32_t *fifo;
+  volatile uint32_t *pwm_fifo;
   volatile uint32_t *clk_reg;
   volatile uint32_t *pwm_ctl;
   volatile uint32_t *pwm_sta;
@@ -111,14 +111,14 @@ void gpio_pulse(int c) {
   
   uint32_t pwm_range = 1 << (c + 1);
 
-    gpio->pwm_reg[PWM_RNG1] = pwm_range;
+  gpio->pwm_reg[PWM_RNG1] = pwm_range;
     
-    *(gpio->fifo) = pwm_range;
+  *(gpio->pwm_fifo) = pwm_range;
   /*
   if (pwm_range < 16) {
     gpio->pwm_reg[PWM_RNG1] = pwm_range;
     
-    *(gpio->fifo) = pwm_range;
+    *(gpio->pwm_fifo) = pwm_range;
   } else {
     // Keep the actual range as short as possible, as we have to
     // wait for one full period of these in the zero phase.
@@ -126,14 +126,14 @@ void gpio_pulse(int c) {
     // have enough of these.
     gpio->pwm_reg[PWM_RNG1] = pwm_range / 8;
     
-    *(gpio->fifo) = pwm_range / 8;
-    *(gpio->fifo) = pwm_range / 8;
-    *(gpio->fifo) = pwm_range / 8;
-    *(gpio->fifo) = pwm_range / 8;
-    *(gpio->fifo) = pwm_range / 8;
-    *(gpio->fifo) = pwm_range / 8;
-    *(gpio->fifo) = pwm_range / 8;
-    *(gpio->fifo) = pwm_range / 8;
+    *(gpio->pwm_fifo) = pwm_range / 8;
+    *(gpio->pwm_fifo) = pwm_range / 8;
+    *(gpio->pwm_fifo) = pwm_range / 8;
+    *(gpio->pwm_fifo) = pwm_range / 8;
+    *(gpio->pwm_fifo) = pwm_range / 8;
+    *(gpio->pwm_fifo) = pwm_range / 8;
+    *(gpio->pwm_fifo) = pwm_range / 8;
+    *(gpio->pwm_fifo) = pwm_range / 8;
   }
 
   */
@@ -143,7 +143,7 @@ void gpio_pulse(int c) {
    * default state (otherwise it just repeats the last
    * value, so will be constantly 'on').
    */
-  *(gpio->fifo) = 0;   // sentinel.
+  *(gpio->pwm_fifo) = 0;   // sentinel.
 
   /*
    * For some reason, we need a second empty sentinel in the
@@ -153,7 +153,7 @@ void gpio_pulse(int c) {
    * but probably there is some buffering register in which data
    * elements are kept after the fifo is emptied.
    */
-  *(gpio->fifo) = 0;
+  *(gpio->pwm_fifo) = 0;
 
   *gpio->pwm_ctl =  PWEN1 | POLA1 | USEF1;
 }
@@ -206,7 +206,7 @@ void gpio_init() {
   gpio->pwm_ctl = gpio->pwm_reg;
   gpio->pwm_sta = gpio->pwm_reg + 1;
   gpio->clk_reg  = mmap_bcm_register(GPIO_CLK_BASE_OFFSET);
-  gpio->fifo = gpio->pwm_reg + PWM_FIFO;
+  gpio->pwm_fifo = gpio->pwm_reg + 6;
   assert((gpio->clk_reg != NULL) && (gpio->pwm_reg != NULL));  // init error.
   
   //    SetGPIOMode(gpioReg, 18, 2); // set GPIO 18 to PWM0 mode (Alternative 5)
@@ -382,6 +382,7 @@ void buf_flush() {
 
       // Now switch on for the sleep time necessary for that bit-plane.
       gpio_pulse(b);
+
     }
     gpio_wait_for_pulse();
   }
