@@ -91,7 +91,7 @@ void gpio_init() {
   volatile uint32_t *port = mmap_bcm_register(GPIO_REGISTER_OFFSET);
   mapped.set_bits = port + (0x1C / sizeof(uint32_t));
   mapped.clear_bits = port + (0x28 / sizeof(uint32_t));
-
+  volatile uint32_t *gpfsel1 = port + 1;
   int i = 0;
   uint32_t divider = BASE_TIME_NANOS / 4;
   int b;
@@ -116,21 +116,21 @@ void gpio_init() {
     *(port+((b)/10)) |=  (1<<(((b)%10)*3));       
   }
 
-  // Get relevant registers
   mapped.pwm_reg  = mmap_bcm_register(GPIO_PWM_BASE_OFFSET);
   volatile uint32_t *ctl = mapped.pwm_reg;
-  
-  // set GPIO 18 to PWM0 mode (Alternative 5)
-  volatile uint32_t *gpioReg = mmap_bcm_register(GPIO_REGISTER_OFFSET);
-  const int reg = 18 / 10;
-  const int mode_pos = (18 % 10) * 3;  
-  gpioReg[reg] = (gpioReg[reg] & ~(7 << mode_pos)) | (2 << mode_pos);
-
-  *ctl = USEF1 | POLA1 | CLRF1;
-
   volatile uint32_t *clk_reg = mmap_bcm_register(GPIO_CLK_BASE_OFFSET);
+  
+
+  const int reg = 1;  
+  const int mode_pos = 24;
   volatile uint32_t *clk_pwm_ctl = clk_reg + 40;
   volatile uint32_t *clk_pwm_div = clk_reg + 41;
+
+  // Set the FSEL18 field of register GPFSEL1 to 010 (GPIO Pin 18
+  // takes alternate function 5).
+  *gpfsel1 = (*gpfsel1 & ~(7 << 24)) | (2 << 24);
+
+  *ctl = USEF1 | POLA1 | CLRF1;
 
   // Kill the PWM clock, then set the source as 500 MHz PLLD, then set
   // the divider, then enable it again.
@@ -213,8 +213,8 @@ void buf_flush() {
     uint32_t row_addr = d_row << 22;
     
     // Set row address (A, B, C). ABC are bits 22-24.
-    *(mapped.clear_bits) =  ~row_addr & (7 << 22);
-    *(mapped.set_bits)   =   row_addr;
+    *mapped.clear_bits =  ~row_addr & (7 << 22);
+    *mapped.set_bits   =   row_addr;
     
     // Rows can't be switched very quickly without ghosting, so we do the
     // full PWM of one row before switching rows.
@@ -247,21 +247,21 @@ void buf_flush() {
 
         // Clear the clock and color, then set color and clock. Clock
         // is bit 17.
-        *(mapped.clear_bits) = 1 << 17;
-        *(mapped.clear_bits) =  ~out_bits & color_mask;
-        *(mapped.set_bits)   =   out_bits & color_mask;
-        *(mapped.set_bits)   = 1 << 17;
+        *mapped.clear_bits = 1 << 17;
+        *mapped.clear_bits =  ~out_bits & color_mask;
+        *mapped.set_bits   =   out_bits & color_mask;
+        *mapped.set_bits   = 1 << 17;
       }
       // Clear the clock and color
-      *(mapped.clear_bits) = (1 << 17) | color_mask;
+      *mapped.clear_bits = (1 << 17) | color_mask;
       
       // OE of the previous row-data must be finished before strobe.
       while (!(*sta & 0x2));
       *ctl = USEF1 | POLA1 | CLRF1;      
 
       // Set and clear the strobe (bit 4)
-      *(mapped.set_bits) = 1 << 4;
-      *(mapped.clear_bits) = 1 << 4;
+      *mapped.set_bits = 1 << 4;
+      *mapped.clear_bits = 1 << 4;
 
       // Now switch on for the sleep time necessary for that bit-plane.
       uint32_t pwm_range = 1 << (b + 1);
