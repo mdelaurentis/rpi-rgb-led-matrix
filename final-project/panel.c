@@ -27,23 +27,18 @@
 #define BCM2709_PERI_BASE        0x3F000000
 
 #define GPIO_REGISTER_OFFSET         0x200000
-#define COUNTER_1Mhz_REGISTER_OFFSET   0x3000
 
 #define GPIO_PWM_BASE_OFFSET	(GPIO_REGISTER_OFFSET + 0xC000)
 #define GPIO_CLK_BASE_OFFSET	0x101000
 
 #define REGISTER_BLOCK_SIZE (4*1024)
 
-#define CLK_PASSWD  (0x5A<<24)
+enum {
+  CLK_PASSWD = 0x5a << 24,
+  CLK_KILL = 1 << 5,
+  CLK_ENAB = 1 << 4,
+};
 
-#define CLK_CTL_KILL    (1 <<5)
-#define CLK_CTL_ENAB    (1 <<4)
-#define CLK_CTL_SRC(x) ((x)<<0)
-
-#define CLK_CTL_SRC_PLLD 6  /* 500.0 MHz */
-
-#define CLK_DIV_DIVI(x) ((x)<<12)
-#define CLK_DIV_DIVF(x) ((x)<< 0)
 
 #define CLK_PWMCTL 40
 #define CLK_PWMDIV 41
@@ -69,8 +64,6 @@ struct gpio_struct {
 } the_gpio_struct;
 
 struct gpio_struct *gpio = &the_gpio_struct;
-
-static volatile uint32_t *timer1Mhz = NULL;
 
 static uint32_t *mmap_bcm_register(off_t register_offset) {
   const off_t base = BCM2709_PERI_BASE;
@@ -168,10 +161,6 @@ void gpio_init() {
   const uint32_t divider = kBaseTimeNanos / 4;
   assert(divider < (1<<12));  // we only have 12 bits.
     
-  // Initialize timer
-  uint32_t *timereg = mmap_bcm_register(COUNTER_1Mhz_REGISTER_OFFSET);
-  timer1Mhz = timereg + 1;
-    
   // Get relevant registers
   volatile uint32_t *gpioReg = mmap_bcm_register(GPIO_REGISTER_OFFSET);
   gpio->pwm_reg  = mmap_bcm_register(GPIO_PWM_BASE_OFFSET);
@@ -190,16 +179,16 @@ void gpio_init() {
   *gpio->pwm_ctl = USEF1 | POLA1 | CLRF1;
   
   // reset PWM clock
-  gpio->clk_reg[CLK_PWMCTL] = CLK_PASSWD | CLK_CTL_KILL;
+  gpio->clk_reg[CLK_PWMCTL] = CLK_PASSWD | CLK_KILL;
   
   // set PWM clock source as 500 MHz PLLD
-  gpio->clk_reg[CLK_PWMCTL] = CLK_PASSWD | CLK_CTL_SRC(CLK_CTL_SRC_PLLD);
+  gpio->clk_reg[CLK_PWMCTL] = CLK_PASSWD | 6;
   
   // set PWM clock divider
-  gpio->clk_reg[CLK_PWMDIV] = CLK_PASSWD | CLK_DIV_DIVI(divider) | CLK_DIV_DIVF(0);
+  gpio->clk_reg[CLK_PWMDIV] = CLK_PASSWD | divider << 12;
   
   // enable PWM clock
-  gpio->clk_reg[CLK_PWMCTL] = CLK_PASSWD | CLK_CTL_ENAB | CLK_CTL_SRC(CLK_CTL_SRC_PLLD);
+  gpio->clk_reg[CLK_PWMCTL] = CLK_PASSWD | CLK_ENAB | 6;
   
 }
 
@@ -363,7 +352,6 @@ void buf_flush() {
 
 int main(int argc, char **argv) {
   int t, x, y, i;
-
   
   gpio_init();
   init_buffer();
@@ -378,7 +366,6 @@ int main(int argc, char **argv) {
         buf_flush();
       }
     }
-    //    usleep(50);
   }
 
 }
