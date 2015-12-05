@@ -37,15 +37,25 @@
 
 #define REGISTER_BLOCK_SIZE (4*1024)
 
+#define CLK_PWMCTL 40
+#define CLK_PWMDIV 41
+
+#define BIT_PLANES 8
+
+// Lower values create a higher framerate, but display will be a
+// bit dimmer. Good values are between 100 and 200.
+#define BASE_TIME_NANOS 130
+
+
+// Clock register values
 enum {
   CLK_PASSWD = 0x5a << 24,
   CLK_KILL = 1 << 5,
   CLK_ENAB = 1 << 4,
 };
 
-#define CLK_PWMCTL 40
-#define CLK_PWMDIV 41
 
+// PWM CTL bits
 enum {
   PWEN1 = 1 << 0,
   POLA1 = 1 << 4,
@@ -58,7 +68,6 @@ struct gpio_struct {
   volatile uint32_t *set_bits;
   volatile uint32_t *clear_bits;
   volatile uint32_t *pwm_reg;
-  volatile uint32_t *clk_reg;
   volatile uint32_t *pwm_ctl;
   volatile uint32_t *pwm_sta;
   volatile uint32_t *pwm_rng1;
@@ -89,14 +98,11 @@ static uint32_t *mmap_bcm_register(off_t register_offset) {
 
   if (result == MAP_FAILED) {
     fprintf(stderr, "mmap error %p\n", result);
-    return NULL;
+    exit(1);
   }
   return result;
 }
 
-// Lower values create a higher framerate, but display will be a
-// bit dimmer. Good values are between 100 and 200.
-static const long kBaseTimeNanos = 130;
 
 
 void gpio_pulse(int c) {
@@ -161,41 +167,38 @@ void gpio_init() {
     *(gpio->port+((b)/10)) |=  (1<<(((b)%10)*3));       
   }
   
-  const uint32_t divider = kBaseTimeNanos / 4;
+   uint32_t divider = BASE_TIME_NANOS / 4;
+   // divider = 16;
   assert(divider < (1<<12));  // we only have 12 bits.
-    
+
+  printf("Divider is %d\n", divider);
   // Get relevant registers
-  volatile uint32_t *gpioReg = mmap_bcm_register(GPIO_REGISTER_OFFSET);
   gpio->pwm_reg  = mmap_bcm_register(GPIO_PWM_BASE_OFFSET);
   gpio->pwm_ctl = gpio->pwm_reg;
   gpio->pwm_sta = gpio->pwm_reg + 1;
   gpio->pwm_rng1 = gpio->pwm_reg + 4;
-  gpio->clk_reg  = mmap_bcm_register(GPIO_CLK_BASE_OFFSET);
   gpio->pwm_fifo = gpio->pwm_reg + 6;
-  assert((gpio->clk_reg != NULL) && (gpio->pwm_reg != NULL));  // init error.
   
-  //    SetGPIOMode(gpioReg, 18, 2); // set GPIO 18 to PWM0 mode (Alternative 5)
+  // set GPIO 18 to PWM0 mode (Alternative 5)
+  volatile uint32_t *gpioReg = mmap_bcm_register(GPIO_REGISTER_OFFSET);
   const int reg = 18 / 10;
-  const int mode_pos = (18 % 10) * 3;
+  const int mode_pos = (18 % 10) * 3;  
   gpioReg[reg] = (gpioReg[reg] & ~(7 << mode_pos)) | (2 << mode_pos);
 
   *gpio->pwm_ctl = USEF1 | POLA1 | CLRF1;
-  
-  // reset PWM clock
-  gpio->clk_reg[CLK_PWMCTL] = CLK_PASSWD | CLK_KILL;
-  
-  // set PWM clock source as 500 MHz PLLD
-  gpio->clk_reg[CLK_PWMCTL] = CLK_PASSWD | 6;
-  
-  // set PWM clock divider
-  gpio->clk_reg[CLK_PWMDIV] = CLK_PASSWD | divider << 12;
-  
-  // enable PWM clock
-  gpio->clk_reg[CLK_PWMCTL] = CLK_PASSWD | CLK_ENAB | 6;
+
+  volatile uint32_t *clk_reg = mmap_bcm_register(GPIO_CLK_BASE_OFFSET);
+  volatile uint32_t *clk_pwm_ctl = clk_reg + 40;
+  volatile uint32_t *clk_pwm_div = clk_reg + 41;
+
+  // Kill the PWM clock, then set the source as 500 MHz PLLD, then set
+  // the divider, then enable it again.
+  *clk_pwm_ctl = CLK_PASSWD | CLK_KILL;
+  *clk_pwm_ctl = CLK_PASSWD | 6;
+  *clk_pwm_div = CLK_PASSWD | divider << 12;
+  *clk_pwm_ctl = CLK_PASSWD | CLK_ENAB | 6;
   
 }
-
-#define BIT_PLANES 8
 
 uint32_t color_buffer[16][11][3];
 static uint16_t cie1931_lookup[256 * 100];
