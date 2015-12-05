@@ -24,6 +24,10 @@
 #include <unistd.h>
 #include <math.h>
 
+#define BRIGHTNESS 100
+#define COLUMNS 32
+#define ROWS 16
+
 #define BCM2709_PERI_BASE        0x3F000000
 
 #define GPIO_REGISTER_OFFSET         0x200000
@@ -38,7 +42,6 @@ enum {
   CLK_KILL = 1 << 5,
   CLK_ENAB = 1 << 4,
 };
-
 
 #define CLK_PWMCTL 40
 #define CLK_PWMDIV 41
@@ -108,7 +111,7 @@ void gpio_pulse(int c) {
    * default state (otherwise it just repeats the last
    * value, so will be constantly 'on').
    */
-  *(gpio->pwm_fifo) = 0;   // sentinel.
+  *gpio->pwm_fifo = 0;   // sentinel.
 
   /*
    * For some reason, we need a second empty sentinel in the
@@ -118,7 +121,7 @@ void gpio_pulse(int c) {
    * but probably there is some buffering register in which data
    * elements are kept after the fifo is emptied.
    */
-  *(gpio->pwm_fifo) = 0;
+  *gpio->pwm_fifo = 0;
 
   *gpio->pwm_ctl =  PWEN1 | POLA1 | USEF1;
 }
@@ -213,34 +216,25 @@ static void cie1931_lookup_init() {
   }
 }
 
-// We need one global instance of a timing correct pulser. There are different
-// implementations depending on the context.
 
-
-  void init_color_buffer() {
+void init_color_buffer() {
   int i, j, k;
     
   for (i = 0; i < 16; i++)
     for (j = 0; j < 11; j++)
       for (k = 0; k < 3; k++)
         color_buffer[i][j][k] = 0;
-  }
+}
 
 void init_buffer() {
   cie1931_lookup_init();
   init_color_buffer();
 }
 
-
-
-#define BRIGHTNESS 100
-
 inline uint16_t map_color(uint8_t c) {
   return cie1931_lookup[c * 100 + (BRIGHTNESS - 1)];
 }
 
-#define COLUMNS 32
-#define ROWS 16
 
 void buf_set_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
 
@@ -267,25 +261,11 @@ void buf_set_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
   }
 }
 
-void buf_fill(uint8_t r, uint8_t g, uint8_t b) {
-  int x, y;
-  for (y = 0; y < 16; y++)
-    for (x = 0; x < 32; x++)
-      buf_set_pixel(x, y, r, g, b);
-}
-
-int debug_counter = 0;
-
 void buf_flush() {
   int b, col;
   uint8_t d_row;
 
-  //  printf("In dump to matrix\n");
-
   uint32_t color_mask = 1 << 7 | 1 << 8 | 1 << 9 | 1 << 10 | 1 << 11 | 1 << 27;
-
-  debug_counter = (debug_counter + 1) % 1000;
-  int debug = debug_counter == 0;
 
   for (d_row = 0; d_row < ROWS / 2; ++d_row) {
     uint32_t row_addr = d_row << 22;
@@ -334,7 +314,6 @@ void buf_flush() {
       // Clear the clock and color
       *(gpio->clear_bits) = (1 << 17) | color_mask;
       
-
       // OE of the previous row-data must be finished before strobe.
       gpio_wait_for_pulse();
 
@@ -355,7 +334,7 @@ int main(int argc, char **argv) {
   
   gpio_init();
   init_buffer();
-  printf("Hi\n");
+
   for (t = 0; t < 255; t += 32) {
     int b = t;
     for (x = 0; x < 32; x++) {
@@ -367,5 +346,4 @@ int main(int argc, char **argv) {
       }
     }
   }
-
 }
