@@ -34,10 +34,6 @@
 
 #define REGISTER_BLOCK_SIZE (4*1024)
 
-#define PWM_RNG1     (0x10 / 4)
-#define PWM_FIFO     (0x18 / 4)
-
-
 #define CLK_PASSWD  (0x5A<<24)
 
 #define CLK_CTL_KILL    (1 <<5)
@@ -64,10 +60,12 @@ struct gpio_struct {
   volatile uint32_t *set_bits;
   volatile uint32_t *clear_bits;
   volatile uint32_t *pwm_reg;
-  volatile uint32_t *pwm_fifo;
   volatile uint32_t *clk_reg;
   volatile uint32_t *pwm_ctl;
   volatile uint32_t *pwm_sta;
+  volatile uint32_t *pwm_rng1;
+  volatile uint32_t *pwm_fifo;
+  
 } the_gpio_struct;
 
 struct gpio_struct *gpio = &the_gpio_struct;
@@ -109,9 +107,8 @@ void gpio_pulse(int c) {
   
   uint32_t pwm_range = 1 << (c + 1);
 
-  gpio->pwm_reg[PWM_RNG1] = pwm_range;
-    
-  *(gpio->pwm_fifo) = pwm_range;
+  *gpio->pwm_rng1 = pwm_range;
+  *gpio->pwm_fifo = pwm_range;
 
   /*
    * We need one value at the end to have it go back to
@@ -180,6 +177,7 @@ void gpio_init() {
   gpio->pwm_reg  = mmap_bcm_register(GPIO_PWM_BASE_OFFSET);
   gpio->pwm_ctl = gpio->pwm_reg;
   gpio->pwm_sta = gpio->pwm_reg + 1;
+  gpio->pwm_rng1 = gpio->pwm_reg + 4;
   gpio->clk_reg  = mmap_bcm_register(GPIO_CLK_BASE_OFFSET);
   gpio->pwm_fifo = gpio->pwm_reg + 6;
   assert((gpio->clk_reg != NULL) && (gpio->pwm_reg != NULL));  // init error.
@@ -370,7 +368,7 @@ int main(int argc, char **argv) {
   gpio_init();
   init_buffer();
   printf("Hi\n");
-  for (t = 0; t < 255; t++) {
+  for (t = 0; t < 255; t += 32) {
     int b = t;
     for (x = 0; x < 32; x++) {
       for (y = 0; y < 16; y++) {
