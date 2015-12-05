@@ -34,20 +34,9 @@
 
 #define REGISTER_BLOCK_SIZE (4*1024)
 
-#define PWM_CTL      (0x00 / 4)
-#define PWM_STA      (0x04 / 4)
 #define PWM_RNG1     (0x10 / 4)
 #define PWM_FIFO     (0x18 / 4)
 
-#define PWM_CTL_CLRF1 (1<<6)	// CH1 Clear Fifo (1 Clears FIFO 0 has no effect)
-#define PWM_CTL_USEF1 (1<<5)	// CH1 Use Fifo (0=data reg transmit 1=Fifo used for transmission)
-#define PWM_CTL_POLA1 (1<<4)	// CH1 Polarity (0=(0=low 1=high) 1=(1=low 0=high)
-#define PWM_CTL_SBIT1 (1<<3)	// CH1 Silence Bit (state of output when 0 transmission takes place)
-#define PWM_CTL_MODE1 (1<<1)	// CH1 Mode (0=pwm 1=serialiser mode)
-#define PWM_CTL_PWEN1 (1<<0)	// CH1 Enable (0=disable 1=enable)
-
-#define PWM_STA_EMPT1 (1<<1)
-#define PWM_STA_FULL1 (1<<0)
 
 #define CLK_PASSWD  (0x5A<<24)
 
@@ -63,6 +52,13 @@
 #define CLK_PWMCTL 40
 #define CLK_PWMDIV 41
 
+enum {
+  PWEN1 = 1 << 0,
+  POLA1 = 1 << 4,
+  USEF1 = 1 << 5,
+  CLRF1 = 1 << 6
+};
+
 struct gpio_struct {
   volatile uint32_t *port;
   volatile uint32_t *set_bits;
@@ -70,6 +66,8 @@ struct gpio_struct {
   volatile uint32_t *pwm_reg;
   volatile uint32_t *fifo;
   volatile uint32_t *clk_reg;
+  volatile uint32_t *pwm_ctl;
+  volatile uint32_t *pwm_sta;
 } the_gpio_struct;
 
 struct gpio_struct *gpio = &the_gpio_struct;
@@ -109,7 +107,14 @@ static const long kBaseTimeNanos = 130;
 
 void gpio_pulse(int c) {
 
+  
+  
   uint32_t pwm_range = 1 << (c + 1);
+
+    gpio->pwm_reg[PWM_RNG1] = pwm_range;
+    
+    *(gpio->fifo) = pwm_range;
+  /*
   if (pwm_range < 16) {
     gpio->pwm_reg[PWM_RNG1] = pwm_range;
     
@@ -131,6 +136,8 @@ void gpio_pulse(int c) {
     *(gpio->fifo) = pwm_range / 8;
   }
 
+  */
+
   /*
    * We need one value at the end to have it go back to
    * default state (otherwise it just repeats the last
@@ -147,15 +154,15 @@ void gpio_pulse(int c) {
    * elements are kept after the fifo is emptied.
    */
   *(gpio->fifo) = 0;
-  
-  gpio->pwm_reg[PWM_CTL] = PWM_CTL_USEF1 | PWM_CTL_PWEN1 | PWM_CTL_POLA1;
+
+  *gpio->pwm_ctl =  PWEN1 | POLA1 | USEF1;
 }
 
 void gpio_wait_for_pulse() {
-  // busy wait until done.  
-  while ((gpio->pwm_reg[PWM_STA] & PWM_STA_EMPT1) == 0);
+  // Wait until the EMPT1 of the STA register is set.
+  while (!(*gpio->pwm_sta & 0x2));
 
-  gpio->pwm_reg[PWM_CTL] = PWM_CTL_USEF1 | PWM_CTL_POLA1 | PWM_CTL_CLRF1;
+  *gpio->pwm_ctl = USEF1 | POLA1 | CLRF1;
 }
 
 void gpio_init() {
@@ -196,6 +203,8 @@ void gpio_init() {
   // Get relevant registers
   volatile uint32_t *gpioReg = mmap_bcm_register(GPIO_REGISTER_OFFSET);
   gpio->pwm_reg  = mmap_bcm_register(GPIO_PWM_BASE_OFFSET);
+  gpio->pwm_ctl = gpio->pwm_reg;
+  gpio->pwm_sta = gpio->pwm_reg + 1;
   gpio->clk_reg  = mmap_bcm_register(GPIO_CLK_BASE_OFFSET);
   gpio->fifo = gpio->pwm_reg + PWM_FIFO;
   assert((gpio->clk_reg != NULL) && (gpio->pwm_reg != NULL));  // init error.
@@ -204,8 +213,8 @@ void gpio_init() {
   const int reg = 18 / 10;
   const int mode_pos = (18 % 10) * 3;
   gpioReg[reg] = (gpioReg[reg] & ~(7 << mode_pos)) | (2 << mode_pos);
-  
-  gpio->pwm_reg[PWM_CTL] = PWM_CTL_USEF1 | PWM_CTL_POLA1 | PWM_CTL_CLRF1;
+
+  *gpio->pwm_ctl = USEF1 | POLA1 | CLRF1;
   
   // reset PWM clock
   gpio->clk_reg[CLK_PWMCTL] = CLK_PASSWD | CLK_CTL_KILL;
@@ -380,6 +389,7 @@ void buf_flush() {
 
 int main(int argc, char **argv) {
   int t, x, y, i;
+
   
   gpio_init();
   init_buffer();
@@ -397,8 +407,4 @@ int main(int argc, char **argv) {
     buf_flush();
   }
 
-   
-  sleep(3);
-  
-  
 }
