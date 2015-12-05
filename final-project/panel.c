@@ -27,25 +27,15 @@
 #define BRIGHTNESS 100
 #define COLUMNS 32
 #define ROWS 16
-
 #define BCM2709_PERI_BASE        0x3F000000
-
 #define GPIO_REGISTER_OFFSET         0x200000
-
 #define GPIO_PWM_BASE_OFFSET	(GPIO_REGISTER_OFFSET + 0xC000)
 #define GPIO_CLK_BASE_OFFSET	0x101000
-
 #define REGISTER_BLOCK_SIZE (4*1024)
-
 #define CLK_PWMCTL 40
 #define CLK_PWMDIV 41
-
 #define BIT_PLANES 8
-
-// Lower values create a higher framerate, but display will be a
-// bit dimmer. Good values are between 100 and 200.
 #define BASE_TIME_NANOS 130
-
 
 // Clock register values
 enum {
@@ -53,7 +43,6 @@ enum {
   CLK_KILL = 1 << 5,
   CLK_ENAB = 1 << 4,
 };
-
 
 // PWM CTL bits
 enum {
@@ -64,15 +53,13 @@ enum {
 };
 
 struct gpio_struct {
-  volatile uint32_t *port;
   volatile uint32_t *set_bits;
   volatile uint32_t *clear_bits;
   volatile uint32_t *pwm_reg;
-  volatile uint32_t *pwm_ctl;
-  
-} the_gpio_struct;
+} mapped;
 
-struct gpio_struct *gpio = &the_gpio_struct;
+uint32_t color_buffer[16][11][3];
+static uint16_t cie1931_lookup[256 * 100];
 
 static uint32_t *mmap_bcm_register(off_t register_offset) {
   const off_t base = BCM2709_PERI_BASE;
@@ -101,13 +88,13 @@ static uint32_t *mmap_bcm_register(off_t register_offset) {
 }
 
 void gpio_init() {
-  gpio->port = mmap_bcm_register(GPIO_REGISTER_OFFSET);
-  gpio->set_bits = gpio->port + (0x1C / sizeof(uint32_t));
-  gpio->clear_bits = gpio->port + (0x28 / sizeof(uint32_t));
-  printf("GPIO Port is %x\n", gpio->port);
+  volatile uint32_t *port = mmap_bcm_register(GPIO_REGISTER_OFFSET);
+  mapped.set_bits = port + (0x1C / sizeof(uint32_t));
+  mapped.clear_bits = port + (0x28 / sizeof(uint32_t));
+
   int i = 0;
   uint32_t divider = BASE_TIME_NANOS / 4;
-  
+  int b;
   uint32_t output_bits[] = {
     4,  // strobe
     17, // clock
@@ -124,17 +111,14 @@ void gpio_init() {
   };
 
   for (i = 0; i < 12; i++) {
-    int b = output_bits[i];
-    *(gpio->port+((b)/10)) &= ~(7<<(((b)%10)*3));
-    *(gpio->port+((b)/10)) |=  (1<<(((b)%10)*3));       
+    b = output_bits[i];
+    *(port+((b)/10)) &= ~(7<<(((b)%10)*3));
+    *(port+((b)/10)) |=  (1<<(((b)%10)*3));       
   }
-   // divider = 16;
-  assert(divider < (1<<12));  // we only have 12 bits.
 
-  printf("Divider is %d\n", divider);
   // Get relevant registers
-  gpio->pwm_reg  = mmap_bcm_register(GPIO_PWM_BASE_OFFSET);
-  gpio->pwm_ctl = gpio->pwm_reg;
+  mapped.pwm_reg  = mmap_bcm_register(GPIO_PWM_BASE_OFFSET);
+  volatile uint32_t *ctl = mapped.pwm_reg;
   
   // set GPIO 18 to PWM0 mode (Alternative 5)
   volatile uint32_t *gpioReg = mmap_bcm_register(GPIO_REGISTER_OFFSET);
@@ -142,7 +126,7 @@ void gpio_init() {
   const int mode_pos = (18 % 10) * 3;  
   gpioReg[reg] = (gpioReg[reg] & ~(7 << mode_pos)) | (2 << mode_pos);
 
-  *gpio->pwm_ctl = USEF1 | POLA1 | CLRF1;
+  *ctl = USEF1 | POLA1 | CLRF1;
 
   volatile uint32_t *clk_reg = mmap_bcm_register(GPIO_CLK_BASE_OFFSET);
   volatile uint32_t *clk_pwm_ctl = clk_reg + 40;
@@ -154,11 +138,7 @@ void gpio_init() {
   *clk_pwm_ctl = CLK_PASSWD | 6;
   *clk_pwm_div = CLK_PASSWD | divider << 12;
   *clk_pwm_ctl = CLK_PASSWD | CLK_ENAB | 6;
-  
 }
-
-uint32_t color_buffer[16][11][3];
-static uint16_t cie1931_lookup[256 * 100];
 
 // Do CIE1931 luminance correction and scale to output bitplanes
 static uint16_t luminance_cie1931(uint8_t c, uint8_t brightness) {
@@ -175,7 +155,6 @@ static void cie1931_lookup_init() {
     }
   }
 }
-
 
 void init_color_buffer() {
   int i, j, k;
@@ -195,7 +174,6 @@ inline uint16_t map_color(uint8_t c) {
   return cie1931_lookup[c * 100 + (BRIGHTNESS - 1)];
 }
 
-
 void buf_set_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
 
   int p;
@@ -204,7 +182,6 @@ void buf_set_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
   uint16_t red   = map_color(r);
   uint16_t green = map_color(g);
   uint16_t blue  = map_color(b);
-  
   
   uint32_t col_mask = 1 << x;
   for (p = 0; p < BIT_PLANES; p++) {
@@ -227,20 +204,17 @@ void buf_flush() {
 
   uint32_t color_mask = 1 << 7 | 1 << 8 | 1 << 9 | 1 << 10 | 1 << 11 | 1 << 27;
 
-  volatile uint32_t *ctl  = gpio->pwm_reg;
-  volatile uint32_t *sta  = gpio->pwm_reg + 0x4  / 4;
-  volatile uint32_t *rng1 = gpio->pwm_reg + 0x10 / 4;    
-  volatile uint32_t *fifo = gpio->pwm_reg + 0x18 / 4;
-
-
-
+  volatile uint32_t *ctl  = mapped.pwm_reg;
+  volatile uint32_t *sta  = mapped.pwm_reg + 0x4  / 4;
+  volatile uint32_t *rng1 = mapped.pwm_reg + 0x10 / 4;    
+  volatile uint32_t *fifo = mapped.pwm_reg + 0x18 / 4;
   
   for (d_row = 0; d_row < ROWS / 2; ++d_row) {
     uint32_t row_addr = d_row << 22;
     
     // Set row address (A, B, C). ABC are bits 22-24.
-    *(gpio->clear_bits) =  ~row_addr & (7 << 22);
-    *(gpio->set_bits)   =   row_addr;
+    *(mapped.clear_bits) =  ~row_addr & (7 << 22);
+    *(mapped.set_bits)   =   row_addr;
     
     // Rows can't be switched very quickly without ghosting, so we do the
     // full PWM of one row before switching rows.
@@ -264,7 +238,6 @@ void buf_flush() {
                              ((r_bits2 & 1) <<  8) |
                              ((g_bits2 & 1) <<  9) |
                              ((b_bits2 & 1) << 10));
-
         r_bits1 >>= 1;
         g_bits1 >>= 1;
         b_bits1 >>= 1;
@@ -274,21 +247,21 @@ void buf_flush() {
 
         // Clear the clock and color, then set color and clock. Clock
         // is bit 17.
-        *(gpio->clear_bits) = 1 << 17;
-        *(gpio->clear_bits) =  ~out_bits & color_mask;
-        *(gpio->set_bits)   =   out_bits & color_mask;
-        *(gpio->set_bits)   = 1 << 17;
+        *(mapped.clear_bits) = 1 << 17;
+        *(mapped.clear_bits) =  ~out_bits & color_mask;
+        *(mapped.set_bits)   =   out_bits & color_mask;
+        *(mapped.set_bits)   = 1 << 17;
       }
       // Clear the clock and color
-      *(gpio->clear_bits) = (1 << 17) | color_mask;
+      *(mapped.clear_bits) = (1 << 17) | color_mask;
       
       // OE of the previous row-data must be finished before strobe.
       while (!(*sta & 0x2));
-      *gpio->pwm_ctl = USEF1 | POLA1 | CLRF1;      
+      *ctl = USEF1 | POLA1 | CLRF1;      
 
       // Set and clear the strobe (bit 4)
-      *(gpio->set_bits) = 1 << 4;
-      *(gpio->clear_bits) = 1 << 4;
+      *(mapped.set_bits) = 1 << 4;
+      *(mapped.clear_bits) = 1 << 4;
 
       // Now switch on for the sleep time necessary for that bit-plane.
       uint32_t pwm_range = 1 << (b + 1);
@@ -301,7 +274,7 @@ void buf_flush() {
 
     }
     while (!(*sta & 0x2));
-    *gpio->pwm_ctl = USEF1 | POLA1 | CLRF1;      
+    *ctl = USEF1 | POLA1 | CLRF1;      
   }
 }
 
