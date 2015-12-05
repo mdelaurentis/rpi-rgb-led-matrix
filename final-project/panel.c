@@ -377,10 +377,10 @@ int main(int argc, char **argv) {
         int r = 255 * (x / 32.0);
         int g = 255 * (y / 16.0);
         buf_set_pixel(x, y, r, g, b);
+        buf_flush();
       }
     }
-    usleep(50);
-    buf_flush();
+    //    usleep(50);
   }
 
 }
