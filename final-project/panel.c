@@ -106,37 +106,12 @@ static const long kBaseTimeNanos = 130;
 
 
 void gpio_pulse(int c) {
-
-  
   
   uint32_t pwm_range = 1 << (c + 1);
 
   gpio->pwm_reg[PWM_RNG1] = pwm_range;
     
   *(gpio->pwm_fifo) = pwm_range;
-  /*
-  if (pwm_range < 16) {
-    gpio->pwm_reg[PWM_RNG1] = pwm_range;
-    
-    *(gpio->pwm_fifo) = pwm_range;
-  } else {
-    // Keep the actual range as short as possible, as we have to
-    // wait for one full period of these in the zero phase.
-    // The hardware can't deal with values < 2, so only do this when
-    // have enough of these.
-    gpio->pwm_reg[PWM_RNG1] = pwm_range / 8;
-    
-    *(gpio->pwm_fifo) = pwm_range / 8;
-    *(gpio->pwm_fifo) = pwm_range / 8;
-    *(gpio->pwm_fifo) = pwm_range / 8;
-    *(gpio->pwm_fifo) = pwm_range / 8;
-    *(gpio->pwm_fifo) = pwm_range / 8;
-    *(gpio->pwm_fifo) = pwm_range / 8;
-    *(gpio->pwm_fifo) = pwm_range / 8;
-    *(gpio->pwm_fifo) = pwm_range / 8;
-  }
-
-  */
 
   /*
    * We need one value at the end to have it go back to
