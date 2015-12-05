@@ -185,7 +185,6 @@ void gpio_init() {
     *(gpio->port+((b)/10)) &= ~(7<<(((b)%10)*3));
     *(gpio->port+((b)/10)) |=  (1<<(((b)%10)*3));       
   }
-
   
   const uint32_t divider = kBaseTimeNanos / 4;
   assert(divider < (1<<12));  // we only have 12 bits.
@@ -222,17 +221,14 @@ void gpio_init() {
   
 }
 
-enum {
-  kBitPlanes = 8  // maximum usable bitplanes.
-};
-
+#define BIT_PLANES 8
 
 uint32_t color_buffer[16][11][3];
 static uint16_t cie1931_lookup[256 * 100];
 
 // Do CIE1931 luminance correction and scale to output bitplanes
 static uint16_t luminance_cie1931(uint8_t c, uint8_t brightness) {
-  float out_factor = ((1 << kBitPlanes) - 1);
+  float out_factor = ((1 << BIT_PLANES) - 1);
   float v = (float) c * brightness / 255.0;
   return out_factor * ((v <= 8) ? v / 902.3 : pow((v + 16) / 116.0, 3));
 }
@@ -266,14 +262,10 @@ void init_buffer() {
 
 
 
-const int brightness_ = 100;
+#define BRIGHTNESS 100
 
 inline uint16_t map_color(uint8_t c) {
-  return cie1931_lookup[c * 100 + (brightness_ - 1)];
-}
-
-void buf_clear() {
-  init_color_buffer();
+  return cie1931_lookup[c * 100 + (BRIGHTNESS - 1)];
 }
 
 #define COLUMNS 32
@@ -290,7 +282,7 @@ void buf_set_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
   
   
   uint32_t col_mask = 1 << x;
-  for (p = 0; p < kBitPlanes; p++) {
+  for (p = 0; p < BIT_PLANES; p++) {
     color_buffer[y][p][0] &= ~col_mask;
     color_buffer[y][p][1] &= ~col_mask;
     color_buffer[y][p][2] &= ~col_mask;
@@ -333,7 +325,7 @@ void buf_flush() {
     
     // Rows can't be switched very quickly without ghosting, so we do the
     // full PWM of one row before switching rows.
-    for (b = 0; b < kBitPlanes; ++b) {
+    for (b = 0; b < BIT_PLANES; ++b) {
       
       const int y = d_row;
       uint32_t r_bits1 = color_buffer[y][b][0];
@@ -404,5 +396,9 @@ int main(int argc, char **argv) {
     usleep(50);
     buf_flush();
   }
+
+   
+  sleep(3);
+  
   
 }
