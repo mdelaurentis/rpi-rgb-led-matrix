@@ -14,7 +14,6 @@
 // along with this program.  If not, see <http://gnu.org/licenses/gpl-2.0.txt>
 
 #include <stdint.h>
-#include <assert.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,16 +23,11 @@
 #include <unistd.h>
 #include <math.h>
 
-#define BRIGHTNESS 100
-#define COLUMNS 32
-#define ROWS 16
-
 #define GPIO_REGISTER_OFFSET     0x3F200000
 #define GPIO_PWM_BASE_OFFSET	 0x3F20c000
 #define GPIO_CLK_BASE_OFFSET	 0x3F101000
 #define REGISTER_BLOCK_SIZE (4*1024)
 
-#define BIT_PLANES 8
 #define BASE_TIME_NANOS 130
 
 // Clock register values
@@ -50,6 +44,27 @@ enum {
   USEF1 = 1 << 5,
   CLRF1 = 1 << 6
 };
+
+enum {
+  GPFSEL0 = 0x7e200000,
+  GPFSEL1 = 0x7e200004,
+  GPSET0  = 0x7e20001c,
+  GPCLR0  = 0x7e200028,
+
+  // PWM registers. The actual addresses aren't listed in the
+  // datasheet, but the offsets are.
+  PWMCTL    = 0x7e20c000,
+  PWMSTA    = 0x7e20c004,
+  PWMRNG1   = 0x7e20c010,
+  PWMFIF1   = 0x7e20c018,
+
+  // PWM registers. The actual addresses aren't listed in the
+  // datasheet, but the offsets are.  
+  CM_PWMCTL = 0x7e1010a0,
+  CM_PWMDIV = 0x7e1010a4
+};
+
+char cie1931_lookup[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8, 9, 9, 9, 10, 10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15, 16, 16, 16, 17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 23, 24, 24, 25, 25, 26, 26, 27, 28, 28, 29, 29, 30, 31, 31, 32, 33, 33, 34, 35, 35, 36, 37, 37, 38, 39, 40, 40, 41, 42, 43, 44, 44, 45, 46, 47, 48, 49, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 75, 76, 77, 78, 79, 80, 82, 83, 84, 85, 87, 88, 89, 90, 92, 93, 94, 96, 97, 99, 100, 101, 103, 104, 106, 107, 108, 110, 111, 113, 114, 116, 118, 119, 121, 122, 124, 125, 127, 129, 130, 132, 134, 135, 137, 139, 141, 142, 144, 146, 148, 149, 151, 153, 155, 157, 159, 161, 162, 164, 166, 168, 170, 172, 174, 176, 178, 180, 182, 185, 187, 189, 191, 193, 195, 197, 200, 202, 204, 206, 208, 211, 213, 215, 218, 220, 222, 225, 227, 230, 232, 234, 237, 239, 242, 244, 247, 249, 252, 255};
 
 uint32_t color_buffer[16][8][3];
 
@@ -77,29 +92,6 @@ static uint32_t *mmap_bcm_register(uint32_t *addr, off_t register_offset) {
   }
   return result;
 }
-
-enum {
-  GPFSEL0 = 0x7e200000,
-  GPFSEL1 = 0x7e200004,
-  GPSET0  = 0x7e20001c,
-  GPCLR0  = 0x7e200028,
-
-  // PWM registers. The actual addresses aren't listed in the
-  // datasheet, but the offsets are.
-  PWMCTL    = 0x7e20c000,
-  PWMSTA    = 0x7e20c004,
-  PWMRNG1   = 0x7e20c010,
-  PWMFIF1   = 0x7e20c018,
-
-  // PWM registers. The actual addresses aren't listed in the
-  // datasheet, but the offsets are.  
-  CM_PWMCTL = 0x7e1010a0,
-  CM_PWMDIV = 0x7e1010a4
-};
-
-char cie1931_lookup[] =
-  {
-   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8, 9, 9, 9, 10, 10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15, 16, 16, 16, 17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 23, 24, 24, 25, 25, 26, 26, 27, 28, 28, 29, 29, 30, 31, 31, 32, 33, 33, 34, 35, 35, 36, 37, 37, 38, 39, 40, 40, 41, 42, 43, 44, 44, 45, 46, 47, 48, 49, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 75, 76, 77, 78, 79, 80, 82, 83, 84, 85, 87, 88, 89, 90, 92, 93, 94, 96, 97, 99, 100, 101, 103, 104, 106, 107, 108, 110, 111, 113, 114, 116, 118, 119, 121, 122, 124, 125, 127, 129, 130, 132, 134, 135, 137, 139, 141, 142, 144, 146, 148, 149, 151, 153, 155, 157, 159, 161, 162, 164, 166, 168, 170, 172, 174, 176, 178, 180, 182, 185, 187, 189, 191, 193, 195, 197, 200, 202, 204, 206, 208, 211, 213, 215, 218, 220, 222, 225, 227, 230, 232, 234, 237, 239, 242, 244, 247, 249, 252, 255};
 
 
 void ledpanel_clear() {
@@ -172,27 +164,35 @@ void ledpanel_init() {
 }
 
 
-void ledpanel_set_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
+void ledpanel_set_pixel(int x, int y, uint8_t red, uint8_t green, uint8_t blue) {
 
   int p;
-  if (x < 0 || x >= COLUMNS || y < 0 || y >= ROWS) return;
+  char r, g, b;
+  uint32_t col_mask;
   
-  uint16_t red   = cie1931_lookup[r];
-  uint16_t green = cie1931_lookup[g];
-  uint16_t blue  = cie1931_lookup[b];
+  if (x < 0 || x > 31 ||
+      y < 0 || y > 15 ||
+      red < 0 || red > 255 ||
+      green < 0 || green > 255 ||
+      blue < 0 || blue > 255)
+    return;
   
-  uint32_t col_mask = 1 << x;
-  for (p = 0; p < BIT_PLANES; p++) {
+  r = cie1931_lookup[red];
+  g = cie1931_lookup[green];
+  b = cie1931_lookup[blue];
+  col_mask = 1 << x;
+  
+  for (p = 0; p < 8; p++) {
+
     color_buffer[y][p][0] &= ~col_mask;
     color_buffer[y][p][1] &= ~col_mask;
     color_buffer[y][p][2] &= ~col_mask;
-    color_buffer[y][p][0] |= (red & 1)   << x;
-    color_buffer[y][p][1] |= (green & 1) << x;
-    color_buffer[y][p][2] |= (blue & 1)  << x;
-
-    red   >>= 1;
-    green >>= 1;
-    blue  >>= 1;
+    color_buffer[y][p][0] |= (r & 1) << x;
+    color_buffer[y][p][1] |= (g & 1) << x;
+    color_buffer[y][p][2] |= (b & 1) << x;
+    r >>= 1;
+    g >>= 1;
+    b >>= 1;
   }
 }
 
@@ -209,7 +209,7 @@ void ledpanel_refresh() {
   volatile uint32_t *gpset0 = (uint32_t*) GPSET0;
   volatile uint32_t *gpclr0 = (uint32_t*) GPCLR0;
   
-  for (d_row = 0; d_row < ROWS / 2; ++d_row) {
+  for (d_row = 0; d_row < 8; ++d_row) {
     uint32_t row_addr = d_row << 22;
     
     // Set row address (A, B, C). ABC are bits 22-24.
@@ -218,7 +218,7 @@ void ledpanel_refresh() {
     
     // Rows can't be switched very quickly without ghosting, so we do the
     // full PWM of one row before switching rows.
-    for (b = 0; b < BIT_PLANES; ++b) {
+    for (b = 0; b < 8; ++b) {
       
       const int y = d_row;
       uint32_t r_bits1 = color_buffer[y][b][0];
@@ -230,7 +230,7 @@ void ledpanel_refresh() {
       
       // While the output enable is still on, we can already clock in the next
       // data.
-      for (col = 0; col < COLUMNS; ++col) {
+      for (col = 0; col < 32; ++col) {
 
         uint32_t out_bits = (((r_bits1 & 1) << 11) |
                              ((g_bits1 & 1) << 27) |
