@@ -28,8 +28,8 @@
 #define COLUMNS 32
 #define ROWS 16
 #define BCM2709_PERI_BASE        0x3F000000
-#define GPIO_REGISTER_OFFSET         0x200000
-#define GPIO_PWM_BASE_OFFSET	(GPIO_REGISTER_OFFSET + 0xC000)
+#define GPIO_REGISTER_OFFSET    0x200000
+#define GPIO_PWM_BASE_OFFSET	0x20c000
 #define GPIO_CLK_BASE_OFFSET	0x101000
 #define REGISTER_BLOCK_SIZE (4*1024)
 #define CLK_PWMCTL 40
@@ -89,7 +89,9 @@ enum {
   GPFSEL0 = 0x7e200000,
   GPFSEL1 = 0x7e200004,
   GPSET0  = 0x7e20001c,
-  GPCLR0  = 0x7e200028
+  GPCLR0  = 0x7e200028,
+
+  PWM_CTL = 0x7e20c000
 };
 
 void gpio_init() {
@@ -131,8 +133,6 @@ void gpio_init() {
     *reg |=  (1<< fld);       
   }
 
-
-
   // Set the FSEL18 field of register GPFSEL1 to 010 (GPIO Pin 18
   // takes alternate function 5).
   reg = gpfsel + 18 / 10;
@@ -140,7 +140,8 @@ void gpio_init() {
   *reg &= ~(7<< fld);
   *reg |=  (2<< fld);       
   
-  mapped.pwm_reg  = mmap_bcm_register(NULL, GPIO_PWM_BASE_OFFSET);
+  mapped.pwm_reg  = mmap_bcm_register((uint32_t*)0x7e20c000, GPIO_PWM_BASE_OFFSET);
+  printf("pwm_reg is %x\n", mapped.pwm_reg);
   volatile uint32_t *ctl = mapped.pwm_reg;
   volatile uint32_t *clk_reg = mmap_bcm_register(NULL, GPIO_CLK_BASE_OFFSET);
 
