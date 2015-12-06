@@ -27,13 +27,12 @@
 #define BRIGHTNESS 100
 #define COLUMNS 32
 #define ROWS 16
-#define BCM2709_PERI_BASE        0x3F000000
-#define GPIO_REGISTER_OFFSET    0x200000
-#define GPIO_PWM_BASE_OFFSET	0x20c000
-#define GPIO_CLK_BASE_OFFSET	0x101000
+
+#define GPIO_REGISTER_OFFSET     0x3F200000
+#define GPIO_PWM_BASE_OFFSET	 0x3F20c000
+#define GPIO_CLK_BASE_OFFSET	 0x3F101000
 #define REGISTER_BLOCK_SIZE (4*1024)
-#define CLK_PWMCTL 40
-#define CLK_PWMDIV 41
+
 #define BIT_PLANES 8
 #define BASE_TIME_NANOS 130
 
@@ -56,7 +55,6 @@ uint32_t color_buffer[16][11][3];
 static uint16_t cie1931_lookup[256 * 100];
 
 static uint32_t *mmap_bcm_register(uint32_t *addr, off_t register_offset) {
-  const off_t base = BCM2709_PERI_BASE;
 
   int mem_fd;
   if ((mem_fd = open("/dev/mem", O_RDWR|O_SYNC) ) < 0) {
@@ -70,7 +68,7 @@ static uint32_t *mmap_bcm_register(uint32_t *addr, off_t register_offset) {
                      PROT_READ|PROT_WRITE,  // Enable r/w on GPIO registers.
                      MAP_SHARED,
                      mem_fd,                // File to map
-                     base + register_offset // Offset to bcm register
+                     register_offset // Offset to bcm register
                      );
   close(mem_fd);
 
@@ -94,21 +92,29 @@ enum {
   PWMRNG1   = 0x7e20c010,
   PWMFIF1   = 0x7e20c018,
 
+  // PWM registers. The actual addresses aren't listed in the
+  // datasheet, but the offsets are.  
   CM_PWMCTL = 0x7e1010a0,
   CM_PWMDIV = 0x7e1010a4
 };
 
 void gpio_init() {
-  // 76f0a000
-  mmap_bcm_register((uint32_t*)0x7e200000, GPIO_REGISTER_OFFSET);
 
+  mmap_bcm_register((uint32_t*)0x7e200000, GPIO_REGISTER_OFFSET);
+  mmap_bcm_register((uint32_t*)0x7e20c000, GPIO_PWM_BASE_OFFSET);
+  mmap_bcm_register((uint32_t*)0x7e1010a0, GPIO_CLK_BASE_OFFSET);
+  
   volatile uint32_t* gpfsel1 = (uint32_t*) GPFSEL1;
   volatile uint32_t* gpfsel = (uint32_t*) GPFSEL0;
   volatile uint32_t* gpset0 = (uint32_t*) GPSET0;
   volatile uint32_t* gpclr0 = (uint32_t*) GPCLR0;
-  volatile uint32_t* reg;
-  uint32_t fld;
+  volatile uint32_t *pwmctl = (uint32_t*) PWMCTL;
+  volatile uint32_t *cm_pwmctl = (uint32_t*) CM_PWMCTL;
+  volatile uint32_t *cm_pwmdiv = (uint32_t*) CM_PWMDIV;
   
+  volatile uint32_t* reg;
+  
+  uint32_t fld;
   int i = 0;
   uint32_t divider = BASE_TIME_NANOS / 4;
   int b;
@@ -142,16 +148,8 @@ void gpio_init() {
   fld = (18 % 10) * 3;
   *reg &= ~(7<< fld);
   *reg |=  (2<< fld);       
-  
-  mmap_bcm_register((uint32_t*)0x7e20c000, GPIO_PWM_BASE_OFFSET);
-  volatile uint32_t *ctl = (uint32_t*) PWMCTL;
-  volatile uint32_t *clk_reg = mmap_bcm_register((uint32_t*)0x7e1010a0, GPIO_CLK_BASE_OFFSET);
 
-  const int mode_pos = 24;
-  volatile uint32_t *cm_pwmctl = (uint32_t*) CM_PWMCTL;
-  volatile uint32_t *cm_pwmdiv = (uint32_t*) CM_PWMDIV;
-
-  *ctl = USEF1 | POLA1 | CLRF1;
+  *pwmctl = USEF1 | POLA1 | CLRF1;
 
   // Kill the PWM clock, then set the source as 500 MHz PLLD, then set
   // the divider, then enable it again.
