@@ -53,7 +53,6 @@ enum {
 };
 
 struct gpio_struct {
-  volatile uint32_t *set_bits;
   volatile uint32_t *clear_bits;
   volatile uint32_t *pwm_reg;
 } mapped;
@@ -87,16 +86,28 @@ static uint32_t *mmap_bcm_register(uint32_t *addr, off_t register_offset) {
   return result;
 }
 
+enum {
+  GPFSEL0 = 0x7e200000,
+  GPFSEL1 = 0x7e200004,
+  GPSET0  = 0x7e20001c
+};
+
 void gpio_init() {
   // 76f0a000
   volatile uint32_t *port = mmap_bcm_register((uint32_t*)0x7e200000, GPIO_REGISTER_OFFSET);
-  mapped.set_bits = port + (0x1C / sizeof(uint32_t));
+
+  volatile uint32_t* gpfsel1 = (uint32_t*) GPFSEL1;
+  volatile uint32_t* gpfsel = (uint32_t*) GPFSEL0;
+  volatile uint32_t* gpset0 = (uint32_t*) GPSET0;
+  volatile uint32_t* reg;
+  uint32_t fld;
+  
   mapped.clear_bits = port + (0x28 / sizeof(uint32_t));
   printf("GPIO base address is %x\n", port);
-  volatile uint32_t *gpfsel1 = port + 1;
   int i = 0;
   uint32_t divider = BASE_TIME_NANOS / 4;
   int b;
+  
   uint32_t output_bits[] = {
     4,  // strobe
     17, // clock
@@ -114,22 +125,28 @@ void gpio_init() {
 
   for (i = 0; i < 12; i++) {
     b = output_bits[i];
-    *(port+((b)/10)) &= ~(7<<(((b)%10)*3));
-    *(port+((b)/10)) |=  (1<<(((b)%10)*3));       
+    reg = gpfsel + b / 10;
+    fld = (b % 10) * 3;
+    *reg &= ~(7<< fld);
+    *reg |=  (1<< fld);       
   }
 
+
+
+  // Set the FSEL18 field of register GPFSEL1 to 010 (GPIO Pin 18
+  // takes alternate function 5).
+  reg = gpfsel + 18 / 10;
+  fld = (18 % 10) * 3;
+  *reg &= ~(7<< fld);
+  *reg |=  (2<< fld);       
+  
   mapped.pwm_reg  = mmap_bcm_register(NULL, GPIO_PWM_BASE_OFFSET);
   volatile uint32_t *ctl = mapped.pwm_reg;
   volatile uint32_t *clk_reg = mmap_bcm_register(NULL, GPIO_CLK_BASE_OFFSET);
 
-  const int reg = 1;  
   const int mode_pos = 24;
   volatile uint32_t *clk_pwm_ctl = clk_reg + 40;
   volatile uint32_t *clk_pwm_div = clk_reg + 41;
-
-  // Set the FSEL18 field of register GPFSEL1 to 010 (GPIO Pin 18
-  // takes alternate function 5).
-  *gpfsel1 = (*gpfsel1 & ~(7 << 24)) | (2 << 24);
 
   *ctl = USEF1 | POLA1 | CLRF1;
 
@@ -209,13 +226,14 @@ void buf_flush() {
   volatile uint32_t *sta  = mapped.pwm_reg + 0x4  / 4;
   volatile uint32_t *rng1 = mapped.pwm_reg + 0x10 / 4;    
   volatile uint32_t *fifo = mapped.pwm_reg + 0x18 / 4;
+  volatile uint32_t *gpset0 = (uint32_t*) GPSET0;
   
   for (d_row = 0; d_row < ROWS / 2; ++d_row) {
     uint32_t row_addr = d_row << 22;
     
     // Set row address (A, B, C). ABC are bits 22-24.
     *mapped.clear_bits =  ~row_addr & (7 << 22);
-    *mapped.set_bits   =   row_addr;
+    *gpset0   =   row_addr;
     
     // Rows can't be switched very quickly without ghosting, so we do the
     // full PWM of one row before switching rows.
@@ -250,8 +268,8 @@ void buf_flush() {
         // is bit 17.
         *mapped.clear_bits = 1 << 17;
         *mapped.clear_bits =  ~out_bits & color_mask;
-        *mapped.set_bits   =   out_bits & color_mask;
-        *mapped.set_bits   = 1 << 17;
+        *gpset0   =   out_bits & color_mask;
+        *gpset0   = 1 << 17;
       }
       // Clear the clock and color
       *mapped.clear_bits = (1 << 17) | color_mask;
@@ -261,7 +279,7 @@ void buf_flush() {
       *ctl = USEF1 | POLA1 | CLRF1;      
 
       // Set and clear the strobe (bit 4)
-      *mapped.set_bits = 1 << 4;
+      *gpset0 = 1 << 4;
       *mapped.clear_bits = 1 << 4;
 
       // Now switch on for the sleep time necessary for that bit-plane.
