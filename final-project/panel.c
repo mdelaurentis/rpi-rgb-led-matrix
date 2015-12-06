@@ -164,117 +164,98 @@ void ledpanel_init() {
 }
 
 
-void ledpanel_set_pixel(int x, int y, uint8_t red, uint8_t green, uint8_t blue) {
+void ledpanel_set_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
 
-  int p;
-  char r, g, b;
-  uint32_t col_mask;
+  char bp, c;
   
   if (x < 0 || x > 31 ||
       y < 0 || y > 15 ||
-      red < 0 || red > 255 ||
-      green < 0 || green > 255 ||
-      blue < 0 || blue > 255)
+      r < 0 || r > 255 ||
+      g < 0 || g > 255 ||
+      b < 0 || b > 255)
     return;
-  
-  r = cie1931_lookup[red];
-  g = cie1931_lookup[green];
-  b = cie1931_lookup[blue];
-  col_mask = 1 << x;
-  
-  for (p = 0; p < 8; p++) {
 
-    color_buffer[y][p][0] &= ~col_mask;
-    color_buffer[y][p][1] &= ~col_mask;
-    color_buffer[y][p][2] &= ~col_mask;
-    color_buffer[y][p][0] |= (r & 1) << x;
-    color_buffer[y][p][1] |= (g & 1) << x;
-    color_buffer[y][p][2] |= (b & 1) << x;
-    r >>= 1;
-    g >>= 1;
-    b >>= 1;
+  char rgb[] = { cie1931_lookup[r],
+                 cie1931_lookup[g],
+                 cie1931_lookup[b] };
+  
+  for (bp = 0; bp < 8; bp++) {
+    for (c = 0; c < 3; c++) {
+      color_buffer[y][bp][c] &= ~(1 << x);
+      color_buffer[y][bp][c] |= (rgb[c] & 1) << x;
+      rgb[c] >>= 1;
+    }
   }
 }
 
 void ledpanel_refresh() {
-  int b, col;
-  uint8_t d_row;
+  char bp, x, y1, y2;
+  
+  uint32_t color_pins = 1 << 7 | 1 << 8 | 1 << 9 | 1 << 10 | 1 << 11 | 1 << 27;
 
-  uint32_t color_mask = 1 << 7 | 1 << 8 | 1 << 9 | 1 << 10 | 1 << 11 | 1 << 27;
-
-  volatile uint32_t *ctl  = (uint32_t*) PWMCTL;
-  volatile uint32_t *sta  = (uint32_t*) PWMSTA;
-  volatile uint32_t *rng1 = (uint32_t*) PWMRNG1;
-  volatile uint32_t *fifo = (uint32_t*) PWMFIF1;
+  volatile uint32_t *pwmctl  = (uint32_t*) PWMCTL;
+  volatile uint32_t *pwmsta  = (uint32_t*) PWMSTA;
+  volatile uint32_t *pwmrng1 = (uint32_t*) PWMRNG1;
+  volatile uint32_t *pwmfif1 = (uint32_t*) PWMFIF1;
   volatile uint32_t *gpset0 = (uint32_t*) GPSET0;
   volatile uint32_t *gpclr0 = (uint32_t*) GPCLR0;
   
-  for (d_row = 0; d_row < 8; ++d_row) {
-    uint32_t row_addr = d_row << 22;
+  for (y1 = 0; y1 < 8; ++y1) {
     
     // Set row address (A, B, C). ABC are bits 22-24.
-    *gpclr0 =  ~row_addr & (7 << 22);
-    *gpset0   =   row_addr;
+    *gpclr0 = 7 << 22;
+    *gpset0 = y1 << 22;
     
     // Rows can't be switched very quickly without ghosting, so we do the
     // full PWM of one row before switching rows.
-    for (b = 0; b < 8; ++b) {
+    for (bp = 0; bp < 8; ++bp) {
       
-      const int y = d_row;
-      uint32_t r_bits1 = color_buffer[y][b][0];
-      uint32_t g_bits1 = color_buffer[y][b][1];
-      uint32_t b_bits1 = color_buffer[y][b][2];
-      uint32_t r_bits2 = color_buffer[y+8][b][0];
-      uint32_t g_bits2 = color_buffer[y+8][b][1];
-      uint32_t b_bits2 = color_buffer[y+8][b][2];
+      y2 = y1 + 8;
+      uint32_t r1 = color_buffer[y1][bp][0];
+      uint32_t g1 = color_buffer[y1][bp][1];
+      uint32_t b1 = color_buffer[y1][bp][2];
+      uint32_t r2 = color_buffer[y2][bp][0];
+      uint32_t g2 = color_buffer[y2][bp][1];
+      uint32_t b2 = color_buffer[y2][bp][2];
       
       // While the output enable is still on, we can already clock in the next
       // data.
-      for (col = 0; col < 32; ++col) {
+      for (x = 0; x < 32; ++x) {
 
-        uint32_t out_bits = (((r_bits1 & 1) << 11) |
-                             ((g_bits1 & 1) << 27) |
-                             ((b_bits1 & 1) <<  7) |
-                             ((r_bits2 & 1) <<  8) |
-                             ((g_bits2 & 1) <<  9) |
-                             ((b_bits2 & 1) << 10));
-        r_bits1 >>= 1;
-        g_bits1 >>= 1;
-        b_bits1 >>= 1;
-        r_bits2 >>= 1;
-        g_bits2 >>= 1;
-        b_bits2 >>= 1;
-
-        // Clear the clock and color, then set color and clock. Clock
-        // is bit 17.
-        *gpclr0 = 1 << 17;
-        *gpclr0 =  ~out_bits & color_mask;
-        *gpset0   =   out_bits & color_mask;
-        *gpset0   = 1 << 17;
+        // Set the pins that should be on for this bit plane, and set the clock.
+        *gpclr0 = color_pins | 1 << 17;
+        *gpset0 = ((r1 & 1) << 11 | (r2 & 1) <<  8 |
+                   (g1 & 1) << 27 | (g2 & 1) <<  9 |
+                   (b1 & 1) <<  7 | (b2 & 1) << 10 |
+                   1 << 17);
+        r1 >>= 1;
+        g1 >>= 1;
+        b1 >>= 1;
+        r2 >>= 1;
+        g2 >>= 1;
+        b2 >>= 1;
       }
       // Clear the clock and color
-      *gpclr0 = (1 << 17) | color_mask;
+      *gpclr0 = color_pins | 1 << 17;
       
       // OE of the previous row-data must be finished before strobe.
-      while (!(*sta & 0x2));
-      *ctl = USEF1 | POLA1 | CLRF1;      
+      while (!(*pwmsta & 0x2));
+      *pwmctl = USEF1 | POLA1 | CLRF1;      
 
       // Set and clear the strobe (bit 4)
       *gpset0 = 1 << 4;
       *gpclr0 = 1 << 4;
 
       // Now switch on for the sleep time necessary for that bit-plane.
-      uint32_t pwm_range = 1 << (b + 1);
-  
-      *rng1 = pwm_range;
-      *fifo = pwm_range;
-      *fifo = 0;
-      *fifo = 0;
-      *ctl =  PWEN1 | POLA1 | USEF1;
+      *pwmrng1 = 1 << (bp + 1);
+      *pwmfif1 = 1 << (bp + 1);
+      *pwmfif1 = 0;
+      *pwmfif1 = 0;
+      *pwmctl =  PWEN1 | POLA1 | USEF1;
 
     }
-    while (!(*sta & 0x2));
-    *ctl = USEF1 | POLA1 | CLRF1;      
+    while (!(*pwmsta & 0x2));
+    *pwmctl = USEF1 | POLA1 | CLRF1;      
   }
 }
 
