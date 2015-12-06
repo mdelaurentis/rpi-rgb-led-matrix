@@ -52,10 +52,6 @@ enum {
   CLRF1 = 1 << 6
 };
 
-struct gpio_struct {
-  volatile uint32_t *pwm_reg;
-} mapped;
-
 uint32_t color_buffer[16][11][3];
 static uint16_t cie1931_lookup[256 * 100];
 
@@ -91,7 +87,10 @@ enum {
   GPSET0  = 0x7e20001c,
   GPCLR0  = 0x7e200028,
 
-  PWM_CTL = 0x7e20c000
+  PWMCTL  = 0x7e20c000,
+  PWMSTA  = 0x7e20c004,
+  PWMRNG1 = 0x7e20c010,
+  PWMFIF1 = 0x7e20c018
 };
 
 void gpio_init() {
@@ -140,23 +139,22 @@ void gpio_init() {
   *reg &= ~(7<< fld);
   *reg |=  (2<< fld);       
   
-  mapped.pwm_reg  = mmap_bcm_register((uint32_t*)0x7e20c000, GPIO_PWM_BASE_OFFSET);
-  printf("pwm_reg is %x\n", mapped.pwm_reg);
-  volatile uint32_t *ctl = mapped.pwm_reg;
+  mmap_bcm_register((uint32_t*)0x7e20c000, GPIO_PWM_BASE_OFFSET);
+  volatile uint32_t *ctl = (uint32_t*) PWMCTL;
   volatile uint32_t *clk_reg = mmap_bcm_register(NULL, GPIO_CLK_BASE_OFFSET);
 
   const int mode_pos = 24;
-  volatile uint32_t *clk_pwm_ctl = clk_reg + 40;
+  volatile uint32_t *clk_pwmctl = clk_reg + 40;
   volatile uint32_t *clk_pwm_div = clk_reg + 41;
 
   *ctl = USEF1 | POLA1 | CLRF1;
 
   // Kill the PWM clock, then set the source as 500 MHz PLLD, then set
   // the divider, then enable it again.
-  *clk_pwm_ctl = CLK_PASSWD | CLK_KILL;
-  *clk_pwm_ctl = CLK_PASSWD | 6;
+  *clk_pwmctl = CLK_PASSWD | CLK_KILL;
+  *clk_pwmctl = CLK_PASSWD | 6;
   *clk_pwm_div = CLK_PASSWD | divider << 12;
-  *clk_pwm_ctl = CLK_PASSWD | CLK_ENAB | 6;
+  *clk_pwmctl = CLK_PASSWD | CLK_ENAB | 6;
 }
 
 // Do CIE1931 luminance correction and scale to output bitplanes
@@ -223,10 +221,10 @@ void buf_flush() {
 
   uint32_t color_mask = 1 << 7 | 1 << 8 | 1 << 9 | 1 << 10 | 1 << 11 | 1 << 27;
 
-  volatile uint32_t *ctl  = mapped.pwm_reg;
-  volatile uint32_t *sta  = mapped.pwm_reg + 0x4  / 4;
-  volatile uint32_t *rng1 = mapped.pwm_reg + 0x10 / 4;    
-  volatile uint32_t *fifo = mapped.pwm_reg + 0x18 / 4;
+  volatile uint32_t *ctl  = (uint32_t*) PWMCTL;
+  volatile uint32_t *sta  = (uint32_t*) PWMSTA;
+  volatile uint32_t *rng1 = (uint32_t*) PWMRNG1;
+  volatile uint32_t *fifo = (uint32_t*) PWMFIF1;
   volatile uint32_t *gpset0 = (uint32_t*) GPSET0;
   volatile uint32_t *gpclr0 = (uint32_t*) GPCLR0;
   
