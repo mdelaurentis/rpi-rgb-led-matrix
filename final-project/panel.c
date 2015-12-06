@@ -19,9 +19,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
-#include <time.h>
-#include <unistd.h>
-#include <math.h>
 
 #define GPIO_REGISTER_OFFSET     0x3F200000
 #define GPIO_PWM_BASE_OFFSET	 0x3F20c000
