@@ -61,7 +61,7 @@ struct gpio_struct {
 uint32_t color_buffer[16][11][3];
 static uint16_t cie1931_lookup[256 * 100];
 
-static uint32_t *mmap_bcm_register(off_t register_offset) {
+static uint32_t *mmap_bcm_register(uint32_t *addr, off_t register_offset) {
   const off_t base = BCM2709_PERI_BASE;
 
   int mem_fd;
@@ -71,7 +71,7 @@ static uint32_t *mmap_bcm_register(off_t register_offset) {
   }
 
   uint32_t *result =
-    (uint32_t*) mmap(NULL,                  // Any adddress in our space will do
+    (uint32_t*) mmap(addr,                  // Any adddress in our space will do
                      REGISTER_BLOCK_SIZE,   // Map length
                      PROT_READ|PROT_WRITE,  // Enable r/w on GPIO registers.
                      MAP_SHARED,
@@ -88,9 +88,11 @@ static uint32_t *mmap_bcm_register(off_t register_offset) {
 }
 
 void gpio_init() {
-  volatile uint32_t *port = mmap_bcm_register(GPIO_REGISTER_OFFSET);
+  // 76f0a000
+  volatile uint32_t *port = mmap_bcm_register((uint32_t*)0x7e200000, GPIO_REGISTER_OFFSET);
   mapped.set_bits = port + (0x1C / sizeof(uint32_t));
   mapped.clear_bits = port + (0x28 / sizeof(uint32_t));
+  printf("GPIO base address is %x\n", port);
   volatile uint32_t *gpfsel1 = port + 1;
   int i = 0;
   uint32_t divider = BASE_TIME_NANOS / 4;
@@ -116,10 +118,9 @@ void gpio_init() {
     *(port+((b)/10)) |=  (1<<(((b)%10)*3));       
   }
 
-  mapped.pwm_reg  = mmap_bcm_register(GPIO_PWM_BASE_OFFSET);
+  mapped.pwm_reg  = mmap_bcm_register(NULL, GPIO_PWM_BASE_OFFSET);
   volatile uint32_t *ctl = mapped.pwm_reg;
-  volatile uint32_t *clk_reg = mmap_bcm_register(GPIO_CLK_BASE_OFFSET);
-  
+  volatile uint32_t *clk_reg = mmap_bcm_register(NULL, GPIO_CLK_BASE_OFFSET);
 
   const int reg = 1;  
   const int mode_pos = 24;
