@@ -51,8 +51,7 @@ enum {
   CLRF1 = 1 << 6
 };
 
-uint32_t color_buffer[16][11][3];
-static uint16_t cie1931_lookup[256 * 100];
+uint32_t color_buffer[16][8][3];
 
 static uint32_t *mmap_bcm_register(uint32_t *addr, off_t register_offset) {
 
@@ -98,29 +97,17 @@ enum {
   CM_PWMDIV = 0x7e1010a4
 };
 
-// Do CIE1931 luminance correction and scale to output bitplanes
-static uint16_t luminance_cie1931(uint8_t c, uint8_t brightness) {
-  float out_factor = ((1 << BIT_PLANES) - 1);
-  float v = (float) c * brightness / 255.0;
-  return out_factor * ((v <= 8) ? v / 902.3 : pow((v + 16) / 116.0, 3));
-}
+char cie1931_lookup[] =
+  {
+   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8, 9, 9, 9, 10, 10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15, 16, 16, 16, 17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 23, 24, 24, 25, 25, 26, 26, 27, 28, 28, 29, 29, 30, 31, 31, 32, 33, 33, 34, 35, 35, 36, 37, 37, 38, 39, 40, 40, 41, 42, 43, 44, 44, 45, 46, 47, 48, 49, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 75, 76, 77, 78, 79, 80, 82, 83, 84, 85, 87, 88, 89, 90, 92, 93, 94, 96, 97, 99, 100, 101, 103, 104, 106, 107, 108, 110, 111, 113, 114, 116, 118, 119, 121, 122, 124, 125, 127, 129, 130, 132, 134, 135, 137, 139, 141, 142, 144, 146, 148, 149, 151, 153, 155, 157, 159, 161, 162, 164, 166, 168, 170, 172, 174, 176, 178, 180, 182, 185, 187, 189, 191, 193, 195, 197, 200, 202, 204, 206, 208, 211, 213, 215, 218, 220, 222, 225, 227, 230, 232, 234, 237, 239, 242, 244, 247, 249, 252, 255};
 
-static void cie1931_lookup_init() {
-  int i, j;
-  for (i = 0; i < 256; ++i) {
-    for (j = 0; j < 100; ++j) {
-      cie1931_lookup[i * 100 + j] = luminance_cie1931(i, j + 1);
-    }
-  }
-}
 
-void init_color_buffer() {
-  int i, j, k;
-    
-  for (i = 0; i < 16; i++)
-    for (j = 0; j < 11; j++)
-      for (k = 0; k < 3; k++)
-        color_buffer[i][j][k] = 0;
+void ledpanel_clear() {
+  int row, bp, color;
+  for (row = 0; row < 16; row++)
+    for (bp = 0; bp < 8; bp++)
+      for (color = 0; color < 3; color++)
+        color_buffer[row][bp][color] = 0;
 }
 
 
@@ -137,13 +124,10 @@ void ledpanel_init() {
   volatile uint32_t *pwmctl = (uint32_t*) PWMCTL;
   volatile uint32_t *cm_pwmctl = (uint32_t*) CM_PWMCTL;
   volatile uint32_t *cm_pwmdiv = (uint32_t*) CM_PWMDIV;
-  
   volatile uint32_t* reg;
   
-  uint32_t fld;
-  int i = 0;
+  uint32_t fld, i, b;
   uint32_t divider = BASE_TIME_NANOS / 4;
-  int b;
   
   uint32_t output_bits[] = {
     4,  // strobe
@@ -184,22 +168,18 @@ void ledpanel_init() {
   *cm_pwmdiv = CLK_PASSWD | divider << 12;
   *cm_pwmctl = CLK_PASSWD | CLK_ENAB | 6;
 
-  cie1931_lookup_init();
-  init_color_buffer();  
+  ledpanel_clear();  
 }
 
-inline uint16_t map_color(uint8_t c) {
-  return cie1931_lookup[c * 100 + (BRIGHTNESS - 1)];
-}
 
-void buf_set_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
+void ledpanel_set_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
 
   int p;
   if (x < 0 || x >= COLUMNS || y < 0 || y >= ROWS) return;
   
-  uint16_t red   = map_color(r);
-  uint16_t green = map_color(g);
-  uint16_t blue  = map_color(b);
+  uint16_t red   = cie1931_lookup[r];
+  uint16_t green = cie1931_lookup[g];
+  uint16_t blue  = cie1931_lookup[b];
   
   uint32_t col_mask = 1 << x;
   for (p = 0; p < BIT_PLANES; p++) {
@@ -216,7 +196,7 @@ void buf_set_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
   }
 }
 
-void buf_flush() {
+void ledpanel_refresh() {
   int b, col;
   uint8_t d_row;
 
@@ -313,8 +293,8 @@ int main(int argc, char **argv) {
       for (y = 0; y < 16; y++) {
         int r = 255 * (x / 32.0);
         int g = 255 * (y / 16.0);
-        buf_set_pixel(x, y, r, g, b);
-        buf_flush();
+        ledpanel_set_pixel(x, y, r, g, b);
+        ledpanel_refresh();
       }
     }
   }
