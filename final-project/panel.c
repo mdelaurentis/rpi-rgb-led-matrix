@@ -87,15 +87,20 @@ enum {
   GPSET0  = 0x7e20001c,
   GPCLR0  = 0x7e200028,
 
-  PWMCTL  = 0x7e20c000,
-  PWMSTA  = 0x7e20c004,
-  PWMRNG1 = 0x7e20c010,
-  PWMFIF1 = 0x7e20c018
+  // PWM registers. The actual addresses aren't listed in the
+  // datasheet, but the offsets are.
+  PWMCTL    = 0x7e20c000,
+  PWMSTA    = 0x7e20c004,
+  PWMRNG1   = 0x7e20c010,
+  PWMFIF1   = 0x7e20c018,
+
+  CM_PWMCTL = 0x7e1010a0,
+  CM_PWMDIV = 0x7e1010a4
 };
 
 void gpio_init() {
   // 76f0a000
-  volatile uint32_t *port = mmap_bcm_register((uint32_t*)0x7e200000, GPIO_REGISTER_OFFSET);
+  mmap_bcm_register((uint32_t*)0x7e200000, GPIO_REGISTER_OFFSET);
 
   volatile uint32_t* gpfsel1 = (uint32_t*) GPFSEL1;
   volatile uint32_t* gpfsel = (uint32_t*) GPFSEL0;
@@ -104,7 +109,6 @@ void gpio_init() {
   volatile uint32_t* reg;
   uint32_t fld;
   
-  printf("GPIO base address is %x\n", port);
   int i = 0;
   uint32_t divider = BASE_TIME_NANOS / 4;
   int b;
@@ -141,20 +145,20 @@ void gpio_init() {
   
   mmap_bcm_register((uint32_t*)0x7e20c000, GPIO_PWM_BASE_OFFSET);
   volatile uint32_t *ctl = (uint32_t*) PWMCTL;
-  volatile uint32_t *clk_reg = mmap_bcm_register(NULL, GPIO_CLK_BASE_OFFSET);
+  volatile uint32_t *clk_reg = mmap_bcm_register((uint32_t*)0x7e1010a0, GPIO_CLK_BASE_OFFSET);
 
   const int mode_pos = 24;
-  volatile uint32_t *clk_pwmctl = clk_reg + 40;
-  volatile uint32_t *clk_pwm_div = clk_reg + 41;
+  volatile uint32_t *cm_pwmctl = (uint32_t*) CM_PWMCTL;
+  volatile uint32_t *cm_pwmdiv = (uint32_t*) CM_PWMDIV;
 
   *ctl = USEF1 | POLA1 | CLRF1;
 
   // Kill the PWM clock, then set the source as 500 MHz PLLD, then set
   // the divider, then enable it again.
-  *clk_pwmctl = CLK_PASSWD | CLK_KILL;
-  *clk_pwmctl = CLK_PASSWD | 6;
-  *clk_pwm_div = CLK_PASSWD | divider << 12;
-  *clk_pwmctl = CLK_PASSWD | CLK_ENAB | 6;
+  *cm_pwmctl = CLK_PASSWD | CLK_KILL;
+  *cm_pwmctl = CLK_PASSWD | 6;
+  *cm_pwmdiv = CLK_PASSWD | divider << 12;
+  *cm_pwmctl = CLK_PASSWD | CLK_ENAB | 6;
 }
 
 // Do CIE1931 luminance correction and scale to output bitplanes
