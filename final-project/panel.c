@@ -53,7 +53,6 @@ enum {
 };
 
 struct gpio_struct {
-  volatile uint32_t *clear_bits;
   volatile uint32_t *pwm_reg;
 } mapped;
 
@@ -89,7 +88,8 @@ static uint32_t *mmap_bcm_register(uint32_t *addr, off_t register_offset) {
 enum {
   GPFSEL0 = 0x7e200000,
   GPFSEL1 = 0x7e200004,
-  GPSET0  = 0x7e20001c
+  GPSET0  = 0x7e20001c,
+  GPCLR0  = 0x7e200028
 };
 
 void gpio_init() {
@@ -99,10 +99,10 @@ void gpio_init() {
   volatile uint32_t* gpfsel1 = (uint32_t*) GPFSEL1;
   volatile uint32_t* gpfsel = (uint32_t*) GPFSEL0;
   volatile uint32_t* gpset0 = (uint32_t*) GPSET0;
+  volatile uint32_t* gpclr0 = (uint32_t*) GPCLR0;
   volatile uint32_t* reg;
   uint32_t fld;
   
-  mapped.clear_bits = port + (0x28 / sizeof(uint32_t));
   printf("GPIO base address is %x\n", port);
   int i = 0;
   uint32_t divider = BASE_TIME_NANOS / 4;
@@ -227,12 +227,13 @@ void buf_flush() {
   volatile uint32_t *rng1 = mapped.pwm_reg + 0x10 / 4;    
   volatile uint32_t *fifo = mapped.pwm_reg + 0x18 / 4;
   volatile uint32_t *gpset0 = (uint32_t*) GPSET0;
+  volatile uint32_t *gpclr0 = (uint32_t*) GPCLR0;
   
   for (d_row = 0; d_row < ROWS / 2; ++d_row) {
     uint32_t row_addr = d_row << 22;
     
     // Set row address (A, B, C). ABC are bits 22-24.
-    *mapped.clear_bits =  ~row_addr & (7 << 22);
+    *gpclr0 =  ~row_addr & (7 << 22);
     *gpset0   =   row_addr;
     
     // Rows can't be switched very quickly without ghosting, so we do the
@@ -266,13 +267,13 @@ void buf_flush() {
 
         // Clear the clock and color, then set color and clock. Clock
         // is bit 17.
-        *mapped.clear_bits = 1 << 17;
-        *mapped.clear_bits =  ~out_bits & color_mask;
+        *gpclr0 = 1 << 17;
+        *gpclr0 =  ~out_bits & color_mask;
         *gpset0   =   out_bits & color_mask;
         *gpset0   = 1 << 17;
       }
       // Clear the clock and color
-      *mapped.clear_bits = (1 << 17) | color_mask;
+      *gpclr0 = (1 << 17) | color_mask;
       
       // OE of the previous row-data must be finished before strobe.
       while (!(*sta & 0x2));
@@ -280,7 +281,7 @@ void buf_flush() {
 
       // Set and clear the strobe (bit 4)
       *gpset0 = 1 << 4;
-      *mapped.clear_bits = 1 << 4;
+      *gpclr0 = 1 << 4;
 
       // Now switch on for the sleep time necessary for that bit-plane.
       uint32_t pwm_range = 1 << (b + 1);
