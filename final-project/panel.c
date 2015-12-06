@@ -98,7 +98,33 @@ enum {
   CM_PWMDIV = 0x7e1010a4
 };
 
-void gpio_init() {
+// Do CIE1931 luminance correction and scale to output bitplanes
+static uint16_t luminance_cie1931(uint8_t c, uint8_t brightness) {
+  float out_factor = ((1 << BIT_PLANES) - 1);
+  float v = (float) c * brightness / 255.0;
+  return out_factor * ((v <= 8) ? v / 902.3 : pow((v + 16) / 116.0, 3));
+}
+
+static void cie1931_lookup_init() {
+  int i, j;
+  for (i = 0; i < 256; ++i) {
+    for (j = 0; j < 100; ++j) {
+      cie1931_lookup[i * 100 + j] = luminance_cie1931(i, j + 1);
+    }
+  }
+}
+
+void init_color_buffer() {
+  int i, j, k;
+    
+  for (i = 0; i < 16; i++)
+    for (j = 0; j < 11; j++)
+      for (k = 0; k < 3; k++)
+        color_buffer[i][j][k] = 0;
+}
+
+
+void ledpanel_init() {
 
   mmap_bcm_register((uint32_t*)0x7e200000, GPIO_REGISTER_OFFSET);
   mmap_bcm_register((uint32_t*)0x7e20c000, GPIO_PWM_BASE_OFFSET);
@@ -157,36 +183,9 @@ void gpio_init() {
   *cm_pwmctl = CLK_PASSWD | 6;
   *cm_pwmdiv = CLK_PASSWD | divider << 12;
   *cm_pwmctl = CLK_PASSWD | CLK_ENAB | 6;
-}
 
-// Do CIE1931 luminance correction and scale to output bitplanes
-static uint16_t luminance_cie1931(uint8_t c, uint8_t brightness) {
-  float out_factor = ((1 << BIT_PLANES) - 1);
-  float v = (float) c * brightness / 255.0;
-  return out_factor * ((v <= 8) ? v / 902.3 : pow((v + 16) / 116.0, 3));
-}
-
-static void cie1931_lookup_init() {
-  int i, j;
-  for (i = 0; i < 256; ++i) {
-    for (j = 0; j < 100; ++j) {
-      cie1931_lookup[i * 100 + j] = luminance_cie1931(i, j + 1);
-    }
-  }
-}
-
-void init_color_buffer() {
-  int i, j, k;
-    
-  for (i = 0; i < 16; i++)
-    for (j = 0; j < 11; j++)
-      for (k = 0; k < 3; k++)
-        color_buffer[i][j][k] = 0;
-}
-
-void init_buffer() {
   cie1931_lookup_init();
-  init_color_buffer();
+  init_color_buffer();  
 }
 
 inline uint16_t map_color(uint8_t c) {
@@ -299,11 +298,14 @@ void buf_flush() {
   }
 }
 
+//
+// Main program
+//
+
 int main(int argc, char **argv) {
   int t, x, y, i;
   
-  gpio_init();
-  init_buffer();
+  ledpanel_init();
 
   for (t = 0; t < 255; t += 8) {
     int b = t;
